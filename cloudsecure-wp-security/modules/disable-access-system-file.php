@@ -92,6 +92,7 @@ class CloudSecureWP_Disable_Access_System_File extends CloudSecureWP_Waf_Engine 
 			'vkexunit'       => array(),
 			'nishiki'        => array(),
 			'swell'          => array(),
+			'woocommerce'    => array(),
 		);
 
 		$results = $this->waf_engine( $waf_rules, $locationmatch_rules, self::AVAILABLE_RULES, $remove_rules );

@@ -629,8 +629,21 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	public function is_remove_rule( $rule_id, $request_items, $remove_rules ): bool {
 		$is_rule_removed = false;
 
+		if ( in_array( $rule_id, $remove_rules['woocommerce'], true ) ) {
+			$sbjs_cookie_keys = preg_grep( '/^sbjs_.+/', array_keys( $request_items['request_cookies'] ) );
+
+			// sourcebusterの除外（woocommerce）
+			if ( !empty( $sbjs_cookie_keys ) ) {
+				foreach ( $sbjs_cookie_keys as $key ) {
+					if ( preg_match( '/(\;|\||\`)\W*?\b(?:(?:c(?:h(?:grp|mod|own|sh)|md|pp)|p(?:asswd|ython|erl|ing|s)|n(?:asm|map|c)|f(?:inger|tp)|(?:kil|mai)l|(?:xte)?rm|ls(?:of)?|telnet|uname|echo|id)\b|g(?:\+\+|cc\b))/i', $request_items['request_cookies'][ $key ] ) === 1 ) {
+						$is_rule_removed = true;
+						break;
+					}
+				}
+			}
+
 		// カスタマイズ操作、オートセーブ時の除外
-		if ( preg_match( '/wp-admin\/customize\.php|customize_changeset_uuid/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
+		} elseif ( preg_match( '/wp-admin\/customize\.php|customize_changeset_uuid/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
 			if ( in_array( $rule_id, $remove_rules['ajax_customize'], true ) ) {
 				if ( isset( $request_items['args']['customize_autosaved'] ) || isset( $request_items['args']['wp_customize'] ) ) {
 					if ( $request_items['args']['customize_autosaved'] === 'on' || $request_items['args']['wp_customize'] === 'on' ) {

@@ -324,6 +324,7 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 			'vkexunit'       => array( '950004', '950001', '950007' ),
 			'nishiki'        => array( '950004', '950001', '950007' ),
 			'swell'          => array( '950004', '950001', '950007' ),
+			'woocommerce'    => array( '959006' ),
 		);
 
 		$results = $this->waf_engine( $waf_rules, $locationmatch_rules, $settings[ self::KEY_AVAILABLE_RULES ], $remove_rules );
