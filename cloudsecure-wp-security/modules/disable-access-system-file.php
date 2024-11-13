@@ -84,15 +84,6 @@ class CloudSecureWP_Disable_Access_System_File extends CloudSecureWP_Waf_Engine 
 		$locationmatch_rules = $this->disable_access_system_file_rules->get_locationmatch_rules();
 		$remove_rules        = array(
 			'ajax_editor'    => array( '950005' ),
-			'ajax_customize' => array(),
-			'rest_api'       => array(),
-			'comment'        => array(),
-			'coccon'         => array(),
-			'emanon'         => array(),
-			'vkexunit'       => array(),
-			'nishiki'        => array(),
-			'swell'          => array(),
-			'woocommerce'    => array(),
 		);
 
 		$results = $this->waf_engine( $waf_rules, $locationmatch_rules, self::AVAILABLE_RULES, $remove_rules );
