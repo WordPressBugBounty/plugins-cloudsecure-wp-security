@@ -317,7 +317,7 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 		$remove_rules        = array(
 			'ajax_editor'    => array('950001', '950901', '950004', '950904', '950006', '950906', '950007', '950907', '950908', '950013', '950019', 'm340095' ),
 			'ajax_customize' => array( '950904', '950906', '950004', '950001', '950007' ),
-			'rest_api'       => array( '950004', '950001', '950007' ),
+			'rest_api'       => array( '950004', '950001', '950007', '950006' ),
 			'comment'        => array( '950004' ),
 			'coccon'         => array( '950004' ),
 			'emanon'         => array( '950004', '950001', '950007' ),
