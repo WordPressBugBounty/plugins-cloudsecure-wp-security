@@ -241,8 +241,6 @@ class CloudSecureWP_Disable_Login extends CloudSecureWP_Common {
 			$row['status']       = (int) $row['status'];
 			$row['failed_count'] = (int) $row['failed_count'];
 
-			$this->set_login_status( $row['status'] );
-
 			if ( self::LOGIN_STATUS_FAILED === $row['status'] ) {
 				$now_failed_count = $row['failed_count'] + 1;
 				$interval_time    = strtotime( $row['login_at'] ) + (int) $this->config->get( self::KEY_INTERVAL );
@@ -256,6 +254,7 @@ class CloudSecureWP_Disable_Login extends CloudSecureWP_Common {
 					$data['login_at']     = $row['login_at'];
 				}
 			} elseif ( self::LOGIN_STATUS_DISABLED === $row['status'] ) {
+				$this->set_login_status( $row['status'] );
 				$duration_time = strtotime( $row['login_at'] ) + (int) $this->config->get( self::KEY_DURATION );
 
 				if ( $now_time <= $duration_time ) {

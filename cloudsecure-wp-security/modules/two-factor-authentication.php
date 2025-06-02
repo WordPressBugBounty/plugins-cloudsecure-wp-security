@@ -247,4 +247,32 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			exit;
 		}
 	}
+
+	/**
+	 * WordPress標準機能のユーザー一覧に表示するcolumnを追加
+	 */
+	public function add_2factor_state_2user_list( $columns ) {
+		$new_columns = [];
+
+		foreach ( $columns as $key => $value ) {
+			$new_columns[ $key ] = $value;
+
+			if ( $key === 'role' ) {
+				$new_columns['is_2factor'] = '2段階認証';
+			}
+		}
+
+		return $new_columns;
+	}
+
+	/**
+	 * WordPress標準機能のユーザー一覧に表示する二段階認証の設定状態を指定
+	 */
+	public function show_2factor_state_2user_list( $value, $column_name, $user_id ) {
+		if ( $column_name === 'is_2factor' ) {
+			$value = get_user_meta( $user_id, 'wp_cloudsecurewp_two_factor_authentication_secret', true );
+			return $value !== '' ? '設定済' : '未設定';
+		}
+		return $value;
+	}
 }

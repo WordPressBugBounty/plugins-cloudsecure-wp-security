@@ -260,6 +260,11 @@ class CloudSecureWP extends CloudSecureWP_Common {
 				add_action( 'wp_login', array( $this->two_factor_authentication, 'wp_login' ), 0, 2 );
 				add_action( 'wp_login', array( $this->two_factor_authentication, 'redirect_if_not_two_factor_authentication_registered' ), 10, 2 );
 			}
+
+			if ( $this->two_factor_authentication->is_enabled() && is_admin() && current_user_can( 'administrator' ) ) {
+				add_filter( 'manage_users_columns', array( $this->two_factor_authentication, 'add_2factor_state_2user_list' ) );
+				add_action( 'manage_users_custom_column', array( $this->two_factor_authentication, 'show_2factor_state_2user_list' ), 10, 3 );
+			}
 		}
 
 		if ( is_admin() ) {
