@@ -333,7 +333,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 		wp_enqueue_style( 'cloudsecurewp', $this->info['plugin_url'] . 'assets/css/style.css', array(), $this->info['version'] );
 
 		$slug = 'cloudsecurewp';
-		add_menu_page( $this->info['plugin_name'], $this->info['plugin_name'], 'manage_options', $slug, array( $this, 'dashboard' ), $this->info['plugin_url'] . 'assets/images/plugin-icon.png' );
+		add_menu_page( $this->info['plugin_name'], $this->info['plugin_name'], 'manage_options', $slug, array( $this, 'dashboard' ), $this->info['plugin_url'] . 'assets/images/plugin-icon.png?v=2' );
 		add_submenu_page( $slug, 'ダッシュボード', 'ダッシュボード', 'manage_options', $slug, array( $this, 'dashboard' ) );
 		add_submenu_page( $slug, 'ログイン無効化', 'ログイン無効化', 'manage_options', $slug . '_disable_login', array( $this, 'm_disable_login' ) );
 		add_submenu_page( $slug, 'ログインURL変更', 'ログインURL変更', 'manage_options', $slug . '_rename_login_page', array( $this, 'm_rename_login_page' ) );

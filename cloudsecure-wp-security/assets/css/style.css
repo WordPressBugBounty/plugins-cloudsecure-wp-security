@@ -43,7 +43,7 @@
 #cloudsecure-wp-security .header-logo {
 	width: min(100%, 380px);
 	aspect-ratio: 380/42;
-	background-image: url("../images/logo.svg");
+	background-image: url("../images/logo.svg?v=2");
 	background-size: contain;
 	background-repeat: no-repeat;
 }
