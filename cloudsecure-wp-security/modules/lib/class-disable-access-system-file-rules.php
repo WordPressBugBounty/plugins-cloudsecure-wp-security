@@ -62,7 +62,7 @@ class CloudSecureWP_Disable_Access_System_File_Rules {
 			'variables'        => array( 'request_filename' ),
 			'remove_variables' => array(),
 			'attack'           => 1,
-			'regex_pattern'    => '(.env|.git)',
+			'regex_pattern'    => '(\.env|\.git)',
 			'transformations'  => array( 'htmlentitydecode', 'lowercase' ),
 		),
 		array(
