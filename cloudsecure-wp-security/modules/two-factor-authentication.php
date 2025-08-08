@@ -13,6 +13,11 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 * @var CloudSecureWP_Disable_Login
 	 */
 	private $disable_login;
+	
+	/**
+	 * 元の認証情報を保存（Base64デコード済み）
+	 */
+	private $original_credentials = array();
 
 	function __construct( array $info, CloudSecureWP_Config $config, CloudSecureWP_Disable_Login $disable_login ) {
 		parent::__construct( $info );
@@ -151,6 +156,12 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			return;
 		}
 
+		// 初回ログイン時に元の認証情報を保存
+		if ( empty( $this->original_credentials ) ) {
+			$this->original_credentials['log'] = $user_login;
+			$this->original_credentials['pwd'] = $_POST['pwd'] ?? '';
+		}
+
 		// 2段階認証コードが送られたとき
 		if ( ! empty( $_POST['google_authenticator_code'] ) && check_admin_referer( $this->get_feature_key() . '_csrf' ) ) {
 			$google_authenticator_code = sanitize_text_field( $_POST['google_authenticator_code'] );
@@ -195,8 +206,8 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		?>
 		<form name="loginform" id="loginform"
 				action="<?php echo esc_url( site_url( 'wp-login.php', 'login_post' ) ); ?>" method="post">
-			<input type="hidden" name="log" value="<?php echo esc_attr( sanitize_text_field( $_REQUEST['log'] ) ); ?>"/>
-			<input type="hidden" name="pwd" value="<?php echo esc_attr( sanitize_text_field( $_REQUEST['pwd'] ) ); ?>"/>
+			<input type="hidden" name="log" value="<?php echo base64_encode( $this->original_credentials['log'] ?? $_REQUEST['log'] ?? '' ); ?>"/>
+			<input type="hidden" name="pwd" value="<?php echo base64_encode( $this->original_credentials['pwd'] ?? $_REQUEST['pwd'] ?? '' ); ?>"/>
 			<?php if ( array_key_exists( 'cloudsecurewp_captcha', $_REQUEST ) ) : ?>
 				<input type="hidden" name="cloudsecurewp_captcha"
 						value="<?php echo esc_attr( sanitize_text_field( $_REQUEST['cloudsecurewp_captcha'] ) ); ?>"/>
@@ -274,5 +285,36 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			return $value !== '' ? '設定済' : '未設定';
 		}
 		return $value;
+	}
+
+	/**
+	 * 2段階認証フォームからのBase64エンコードされた認証情報をデコード
+	 *
+	 * @param mixed $user
+	 * @param string $username
+	 * @param string $password
+	 * @return mixed
+	 */
+	public function decode_base64_credentials( $user, $username, $password ) {
+		// 2段階認証フォームからの送信かチェック
+		if ( ! empty( $_POST['google_authenticator_code'] ) && check_admin_referer( $this->get_feature_key() . '_csrf' ) ) {
+			// Base64エンコードされた認証情報をデコード
+			if ( isset( $_POST['log'] ) ) {
+				$decoded_username = base64_decode( $_POST['log'] );
+				$this->original_credentials['log'] = $decoded_username;
+				$_POST['log'] = $decoded_username;
+			}
+			
+			if ( isset( $_POST['pwd'] ) ) {
+				$decoded_password = base64_decode( $_POST['pwd'] );
+				$this->original_credentials['pwd'] = $decoded_password;
+				$_POST['pwd'] = $decoded_password;
+				
+				// デコードされたパスワードで認証を実行
+				return wp_authenticate_username_password( null, $decoded_username, $decoded_password );
+			}
+		}
+		
+		return $user;
 	}
 }

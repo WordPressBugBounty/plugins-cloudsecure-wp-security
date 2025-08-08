@@ -257,6 +257,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			}
 
 			if ( $this->two_factor_authentication->is_enabled() && 'xmlrpc.php' !== basename( $_SERVER['SCRIPT_NAME'] ) && ! is_admin() ) {
+				add_filter( 'authenticate', array( $this->two_factor_authentication, 'decode_base64_credentials' ), 0, 3 );
 				add_action( 'wp_login', array( $this->two_factor_authentication, 'wp_login' ), 0, 2 );
 				add_action( 'wp_login', array( $this->two_factor_authentication, 'redirect_if_not_two_factor_authentication_registered' ), 10, 2 );
 			}
