@@ -22,9 +22,9 @@ require_once __DIR__ . '/lib/class-time-based-one-time-password.php';
 require_once __DIR__ . '/login-log.php';
 require_once __DIR__ . '/two-factor-authentication.php';
 require_once __DIR__ . '/server-error-notification.php';
+require_once __DIR__ . '/lib/class-waf-rules.php';
 require_once __DIR__ . '/waf-engine.php';
 require_once __DIR__ . '/waf.php';
-require_once __DIR__ . '/lib/class-waf-rules.php';
 require_once __DIR__ . '/disable-access-system-file.php';
 require_once __DIR__ . '/lib/class-disable-access-system-file-rules.php';
 

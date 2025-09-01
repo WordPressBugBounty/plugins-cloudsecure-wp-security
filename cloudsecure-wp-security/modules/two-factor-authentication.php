@@ -145,6 +145,10 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			return;
 		}
 
+		if ( ! isset( $user->roles[0] ) ) {
+			return;
+		}
+
 		// 有効な権限グループに含まれないとき
 		if ( ! $this->is_role_enabled( $user->roles[0] ) ) {
 			return;
@@ -253,9 +257,12 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 */
 	public function redirect_if_not_two_factor_authentication_registered( $user_login, $user ) {
 		$secret = get_user_option( 'cloudsecurewp_two_factor_authentication_secret', $user->ID );
-		if ( $this->is_enabled() && $this->is_role_enabled( $user->roles[0] ) && ! $secret && $_SERVER['REQUEST_URI'] !== '/wp-admin/admin.php?page=cloudsecurewp_two_factor_authentication_registration' ) {
-			wp_redirect( admin_url( 'admin.php?page=cloudsecurewp_two_factor_authentication_registration' ) );
-			exit;
+
+		if ( isset( $user->roles[0] ) ) {
+			if ( $this->is_enabled() && $this->is_role_enabled( $user->roles[0] ) && ! $secret && $_SERVER['REQUEST_URI'] !== '/wp-admin/admin.php?page=cloudsecurewp_two_factor_authentication_registration' ) {
+				wp_redirect( admin_url( 'admin.php?page=cloudsecurewp_two_factor_authentication_registration' ) );
+				exit;
+			}
 		}
 	}
 

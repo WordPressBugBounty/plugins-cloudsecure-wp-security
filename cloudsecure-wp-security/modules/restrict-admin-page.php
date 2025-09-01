@@ -154,7 +154,7 @@ class CloudSecureWP_Restrict_Admin_Page extends CloudSecureWP_Common {
 	 * @return array
 	 */
 	public function get_exclude_paths(): array {
-		return $this->config->get( self::KEY_PATHS ?? array() );
+		return $this->config->get( self::KEY_PATHS ) ?? array();
 	}
 
 	/**
