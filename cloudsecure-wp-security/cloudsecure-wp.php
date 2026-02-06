@@ -13,7 +13,7 @@
  * Plugin Name:   CloudSecure WP Security
  * Plugin URI:    https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security
  * Description:   管理画面とログインURLをサイバー攻撃から守る、安心の国産・日本語対応プラグインです。かんたんな設定を行うだけで、不正アクセスや不正ログインからあなたのWordPressを保護し、セキュリティが向上します。また、各機能の有効・無効（ON・OFF）や設定などをお好みにカスタマイズし、いつでも保護状態を管理できます。
- * Version:       1.3.18
+ * Version:       1.3.24
  * Requires PHP:  7.1
  * Author:        CloudSecure,Inc.
  * Author URI:    https://cloudsecure.co.jp
@@ -41,6 +41,11 @@ global $cloudsecurewp;
 
 $cloudsecurewp = new CloudSecureWP( $cloudsecurewp_info );
 $cloudsecurewp->run();
+
+// WP-CLI コマンドの読み込み
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	require_once 'modules/cli/class-cloudsecure-wp-cli.php';
+}
 
 /**
  * プラグイン有効化時の処理

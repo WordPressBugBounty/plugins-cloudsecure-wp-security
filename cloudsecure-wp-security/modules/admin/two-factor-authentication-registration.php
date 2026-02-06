@@ -12,6 +12,12 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 	 * @var string
 	 */
 	private $default_key;
+	/**
+	 * 秘密鍵が登録済みかどうか
+	 *
+	 * @var bool
+	 */
+	private $is_registered;
 
 	function __construct( array $info, CloudSecureWP_Two_Factor_Authentication $two_factor_authentication ) {
 		parent::__construct( $info );
@@ -24,7 +30,9 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 	 * 画面表示用のデータを準備
 	 */
 	public function prepare_view_data(): void {
-		$this->default_key = get_user_option( 'cloudsecurewp_two_factor_authentication_secret' );
+		$stored_secret       = get_user_option( 'cloudsecurewp_two_factor_authentication_secret' );
+		$this->is_registered = ! empty( $stored_secret );
+		$this->default_key   = '';
 		if ( ! empty( $_POST ) && check_admin_referer( $this->two_factor_authentication->get_feature_key() . '_csrf' ) ) {
 			if ( ! empty( $_POST['key'] ) ) {
 				$this->default_key = sanitize_text_field( $_POST['key'] );
@@ -44,6 +52,9 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 			if ( CloudSecureWP_Time_Based_One_Time_Password::verify_code( $key, $google_authenticator_code, 2 ) ) {
 				update_user_option( get_current_user_id(), 'cloudsecurewp_two_factor_authentication_secret', $key );
 				$this->messages[] = 'セットアップキーを保存しました。';
+				// 保存後は秘密鍵を非表示にする
+				$this->default_key   = '';
+				$this->is_registered = true;
 			} else {
 				$this->errors[] = 'セットアップキーを保存できませんでした。<br />認証コードが間違っています。';
 			}
@@ -76,6 +87,20 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 		<form method="post">
 			<div class="box">
 				<div class="box-bottom">
+					<div class="box-row flex-start">
+						<div class="box-row-title not-label pt-12">
+							<label for="key">設定状況</label>
+						</div>
+						<div class="box-row-content">
+								<div class="flex">
+									<?php if ( $this->is_registered ) : ?>
+										<p>設定済</p>
+									<?php else : ?>
+										<p>未設定</p>
+									<?php endif; ?>
+								</div>
+						</div>
+					</div>
 					<div class="box-row flex-start">
 						<div class="box-row-title not-label pt-12">
 							<label for="key">セットアップキー</label>
@@ -171,11 +196,9 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 
 			const qrcode = new QRCode('qrcode', {correctLevel: QRCode.CorrectLevel.M})
 
-			function showQRIfExists() {
-				const key = document.getElementById('key').value
-				document.getElementById('qrcode_container').hidden = !key
-				document.getElementById('guide_message').hidden = !key
-				if (!key) return
+			function showQRCode(key) {
+				document.getElementById('qrcode_container').hidden = false
+				document.getElementById('guide_message').hidden = false
 				const name = document.querySelector('.display-name').textContent
 
 				// https://github.com/google/google-authenticator/wiki/Key-Uri-Format
@@ -184,11 +207,17 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 				document.getElementById('google_authenticator_code').focus()
 			}
 
-			showQRIfExists()
+			// ページ読み込み時に秘密鍵が入力されている場合はQRコードを表示
+			// （認証コードエラー時の再表示のため）
+			const secretKey = document.getElementById('key').value
+			if (secretKey) {
+				showQRCode(secretKey)
+			}
 
 			document.getElementById('generate_key').addEventListener('click', () => {
-				document.getElementById('key').value = generateKey()
-				showQRIfExists()
+				const newKey = generateKey()
+				document.getElementById('key').value = newKey
+				showQRCode(newKey)
 			})
 		</script>
 		<?php

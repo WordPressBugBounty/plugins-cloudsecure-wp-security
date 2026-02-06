@@ -80,7 +80,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 				$json_decoded_post_data = json_decode( $post_data, true );
 
 				// nullでなければjsonとなる
-				if ( isset( $json_decoded_post_data ) ) {
+				if ( is_array( $json_decoded_post_data ) ) {
 					$args = array_merge( $args, $json_decoded_post_data );
 				}
 			}

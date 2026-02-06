@@ -88,9 +88,16 @@ class CloudSecureWP_Disable_RESTAPI extends CloudSecureWP_Common {
 
 		if ( ! empty( $plugins ) ) {
 			foreach ( $plugins as $plugin_path => $plugin ) {
+				// プラグイン名取得
+				$plugin_name = $plugin['TextDomain'];
+				if ( $plugin['Name'] === 'Hello Dolly' ) {
+					// Hello Dolly対応
+					$plugin_name = 'hello-dolly';
+				}
+
 				if ( is_plugin_active( $plugin_path ) ) {
-					if ( false === in_array( $plugin['TextDomain'], $exclude_plugins ) && $plugin['TextDomain'] !== $this->info['text_domain'] ) {
-						$plugin_names[] = $plugin['TextDomain'];
+					if ( false === in_array( $plugin_name, $exclude_plugins, true ) && $plugin_name !== $this->info['text_domain'] ) {
+						$plugin_names[] = $plugin_name;
 					}
 				}
 			}

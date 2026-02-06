@@ -363,7 +363,7 @@ class CloudSecureWP_Update_Notice extends CloudSecureWP_Common {
 		foreach ( $update_themes as $text_domain => $theme ) {
 			$new_version = '';
 
-			if ( $theme['new_version'] !== $last_notice_themes[ $text_domain ]['new_version'] ?? '' ) {
+			if ( $theme['new_version'] !== ( $last_notice_themes[ $text_domain ]['new_version'] ?? '' ) ) {
 
 				if ( self::THEME_VALUES[2] === (int) $settings[ self::KEY_THEME ] ) {
 					if ( $text_domain === $active_text_domain ) {

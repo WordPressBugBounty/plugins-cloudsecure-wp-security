@@ -84,7 +84,7 @@ class CloudSecureWP_Htaccess extends CloudSecureWP_Common {
 	 * @return string
 	 */
 	private function get_setting_pattern( string $tag ): string {
-		return '/' . self::TAG_PREFIX_START . $tag . '.*' . self::TAG_PREFIX_END . $tag . '\r?\n/s';
+		return '/' . self::TAG_PREFIX_START . $tag . '.*?' . self::TAG_PREFIX_END . $tag . '\r?\n/s';
 	}
 
 	/**
@@ -149,12 +149,22 @@ class CloudSecureWP_Htaccess extends CloudSecureWP_Common {
 		$contents = $this->load_contents();
 
 		if ( ! empty( $contents ) ) {
-			$plagin_setting  = self::TAG_PREFIX_START . $this->get_plugin_settings_tag() . "\n";
-			$plagin_setting .= self::TAG_PREFIX_END . $this->get_plugin_settings_tag() . "\n";
+			$plugin_setting  = self::TAG_PREFIX_START . $this->get_plugin_settings_tag() . "\n";
+			$plugin_setting .= self::TAG_PREFIX_END . $this->get_plugin_settings_tag() . "\n";
 			$wp_tag_start    = self::TAG_PREFIX_START . self::TAG_WP_SETTINGS;
-			$contents        = str_replace( $wp_tag_start, $plagin_setting . $wp_tag_start, $contents );
+			$new_contents    = preg_replace(
+				'/' . preg_quote( $wp_tag_start, '/' ) . '/',
+				addcslashes( $plugin_setting . $wp_tag_start, '\\$' ),
+				$contents,
+				1,
+				$count
+			);
 
-			if ( false !== $this->save_contents( $contents ) ) {
+			if ( 0 === $count ) {
+				return false;
+			}
+
+			if ( false !== $this->save_contents( $new_contents ) ) {
 				return true;
 			}
 		}
@@ -176,12 +186,79 @@ class CloudSecureWP_Htaccess extends CloudSecureWP_Common {
 			$add_setting   .= $setting;
 			$add_setting   .= self::TAG_PREFIX_END . $tag . "\n";
 			$plugin_tag_end = self::TAG_PREFIX_END . $this->get_plugin_settings_tag();
-			$contents       = str_replace( $plugin_tag_end, $add_setting . $plugin_tag_end, $contents );
+			$new_contents   = preg_replace(
+				'/' . preg_quote( $plugin_tag_end, '/' ) . '/',
+				addcslashes( $add_setting . $plugin_tag_end, '\\$' ),
+				$contents,
+				1,
+				$count
+			);
 
-			if ( false !== $this->save_contents( $contents ) ) {
+			if ( 0 === $count ) {
+				return false;
+			}
+
+			if ( false !== $this->save_contents( $new_contents ) ) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * CloudSecure WP Security Settingsブロックを再配置
+	 *
+	 * @return void
+	 */
+	public function reorganize_plugin_settings_blocks(): void {
+		// .htaccessファイルの内容を取得
+		$contents = $this->load_contents();
+		if ( empty( $contents ) ) {
+			return;
+		}
+
+		// CloudSecure WP Security Settingsブロックをすべて取得
+		$plugin_pattern = $this->get_setting_pattern( self::TAG_PLUGIN_SETTINGS );
+		$matches        = array();
+
+		$result = preg_match_all( $plugin_pattern, $contents, $matches );
+		if ( false === $result || 0 === $result ) {
+			// ブロックを取得できなかった場合
+			return;
+		}
+
+		// 見つかったブロックから1番目のブロックを取得
+		$found_blocks = $matches[0];
+		$first_block  = $found_blocks[0];
+
+		// すべてのCloudSecure WP Security Settingsブロックを削除
+		$contents_without_blocks = preg_replace(
+			$plugin_pattern,
+			'',
+			$contents,
+			-1,
+			$count
+		);
+		if ( is_null( $contents_without_blocks ) || 0 === $count ) {
+			// ブロックを削除できなかった場合
+			return;
+		}
+
+		// WordPressブロックの開始タグを探して、その直前にプラグインブロックを挿入
+		$wp_tag_start = self::TAG_PREFIX_START . self::TAG_WP_SETTINGS;
+		$new_contents = preg_replace(
+			'/' . preg_quote( $wp_tag_start, '/' ) . '/',
+			addcslashes( $first_block . $wp_tag_start, '\\$' ),
+			$contents_without_blocks,
+			1,
+			$count
+		);
+		if ( is_null( $new_contents ) || 0 === $count ) {
+			// ブロックを挿入できなかった場合
+			return;
+		}
+
+		// .htaccessファイルに保存
+		$this->save_contents( $new_contents );
 	}
 }

@@ -110,7 +110,7 @@ class CloudSecureWP_Admin_Waf extends CloudSecureWP_Admin_Common {
 			<h1 class="title-block-title">シンプルWAF</h1>
 		</div>
 		<div class="title-bottom-text">
-			WordPressへの基本的な攻撃を検知すると403エラー（Foribidden）を返して検知履歴を記録し、管理者にメールで通知します。<br />
+			WordPressへの基本的な攻撃を検知すると403エラー（Forbidden）を返して検知履歴を記録し、管理者にメールで通知します。<br />
 			1分間以内に同じ種別の攻撃を検知した場合、検知履歴は記録しますが、メールでの通知は行いません。<br />
 			<strong>※機能を有効にした場合のみ、検知履歴を記録します。</strong>
 		</div>

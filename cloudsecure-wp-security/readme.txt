@@ -2,8 +2,8 @@
 Contributors: cloudsecure
 Tags: security, login lock, brute force, anti-spam, waf
 Requires at least: 5.3.15
-Tested up to: 6.8
-Stable tag: 1.3.18
+Tested up to: 6.9
+Stable tag: 1.3.24
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -105,6 +105,25 @@ WordPress、プラグイン、テーマの更新が必要になったとき、�
 [CloudSecure WP Security FAQ](https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security/faq.php)
 
 == Changelog ==
+
+= 1.3.24 =
+* 軽微な修正
+
+= 1.3.23 =
+* 軽微な修正
+
+= 1.3.22 =
+* 2段階認証に関する軽微な修正
+
+= 1.3.21 =
+* WordPress6.9をサポート
+
+= 1.3.20 =
+* 設定ファイルアクセス防止機能に関する不具合を修正
+* 軽微な修正
+
+= 1.3.19 =
+* 軽微な修正
 
 = 1.3.18 =
 * 軽微な修正

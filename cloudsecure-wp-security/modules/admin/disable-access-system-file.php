@@ -71,7 +71,7 @@ class CloudSecureWP_Admin_Disable_Access_System_File extends CloudSecureWP_Admin
 			<h1 class="title-block-title">設定ファイルアクセス防止</h1>
 		</div>
 		<div class="title-bottom-text">
-			「wp-config.php」等の設定ファイルへのアクセスを検知すると、403エラー（Foribidden）を返します。
+			「wp-config.php」等の設定ファイルへのアクセスを検知すると、403エラー（Forbidden）を返します。
 		</div>
 		<?php
 	}
