@@ -507,9 +507,9 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	public function check_request_item_value( $waf_rule, $request_items_key, $request_items_value, $variable ): array {
 		$results = array(
 			'is_matched'   => false,
-			'match_string' => ''
+			'match_string' => '',
 		);
-		$matches               = array();
+		$matches = array();
 
 		// リクエスト情報配列のkeyとvalueの変換
 		$tmp_key = $this->transform( $waf_rule['transformations'], $request_items_key );
@@ -540,7 +540,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	public function check_request_item_key( $waf_rule, $request_items_key, $variable ): array {
 		$results = array(
 			'is_matched'   => false,
-			'match_string' => ''
+			'match_string' => '',
 		);
 		$matches = array();
 
@@ -630,10 +630,11 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	 * @param string $rule_id
 	 * @param array  $request_items
 	 * @param array  $remove_rules
-	 * @return bool
+	 * @return array
 	 */
-	public function is_remove_rule( $rule_id, $request_items, $remove_rules, $acf_post_types ): bool {
-		$is_rule_removed = false;
+	public function is_remove_rule( $rule_id, $request_items, $remove_rules, $acf_post_types ): array {
+		$is_rule_removed         = false;
+		$modify_remove_variables = array();
 
 		if ( isset( $remove_rules['woocommerce'] ) ) {
 			if ( in_array( $rule_id, $remove_rules['woocommerce'], true ) ) {
@@ -656,6 +657,28 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			if ( preg_match( '/wp-admin\/customize\.php|customize_changeset_uuid/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['ajax_customize'], true ) ) {
 					if ( ( $request_items['args']['customize_autosaved'] ?? '' ) === 'on' || ( $request_items['args']['wp_customize'] ?? '' ) === 'on' ) {
+						$action = $request_items['args']['action'] ?? '';
+						if ( $action === 'update-widget' ) {
+							// actionがupdate-widgetの場合はルール全体を除外（cocoon）
+							$is_rule_removed = true;
+						} else {
+							// それ以外の場合はcustomized, customize_changeset_dataキーのみ除外
+							$modify_remove_variables['args'] = array( 'customized', 'customize_changeset_data' );
+						}
+					}
+				}
+			// ウィジェット保存時（cocoonテーマ）の除外
+			} elseif ( preg_match( '/wp-admin\/widgets\.php/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
+				if ( in_array( $rule_id, $remove_rules['ajax_customize'], true ) ) {
+					if ( ( $request_items['args']['action'] ?? '' ) === 'save-widget' ) {
+						$is_rule_removed = true;
+					}
+				}
+			// メニュー操作時（cocoonテーマ）の除外
+			} elseif ( preg_match( '/wp-admin\/nav-menus\.php/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
+				if ( in_array( $rule_id, $remove_rules['ajax_customize'], true ) ) {
+					$action = $request_items['args']['action'] ?? '';
+					if ( $action === 'update' || $action === 'edit' ) {
 						$is_rule_removed = true;
 					}
 				}
@@ -663,69 +686,108 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 		}
 
 		if ( isset( $remove_rules['rest_api'] ) ) {
-			// 投稿・編集の操作は特定のルールを除外する(rest_api)
-			if ( preg_match( '/templates|blocks|template-parts|navigation|global-styles|pages|posts|batch/', $request_items['request_filename'] ) === 1 ) {
+			// 投稿・編集（templates, blocks, template-parts, navigation, pages, posts）の場合はcontentキーを除外
+			if ( preg_match( '/templates|blocks|template-parts|navigation|pages|posts/', $request_items['request_filename'] ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$is_rule_removed = true;
+						$modify_remove_variables['args'] = array( 'content' );
+					}
+				}
+
+			// global-styles の場合はstylesキーを除外
+			} elseif ( preg_match( '/global-styles/', $request_items['request_filename'] ) === 1 ) {
+				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
+					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
+						$modify_remove_variables['args'] = array( '/^styles/' );
+					}
+				}
+
+			// batch の場合はrequestsキーを除外
+			} elseif ( preg_match( '/batch/', $request_items['request_filename'] ) === 1 ) {
+				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
+					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
+						$modify_remove_variables['args'] = array( '/^requests/' );
 					}
 				}
 
 			// 投稿・編集の操作は特定のルールを除外する(post.php)
 			} elseif ( preg_match( '/wp-admin\/post\.php/', $request_items['request_filename'] ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
-					if ( ( $request_items['args']['action'] ?? '' ) === 'editpost' ) {
+					$action = $request_items['args']['action'] ?? '';
+					if ( $action === 'editpost' ) {
 						$is_rule_removed = true;
+					} elseif ( $action === 'post-quickdraft-save' ) {
+						$modify_remove_variables['args'] = array( 'content' );
 					}
 				}
 
-			// nishikiルール除外
+			// カスタマイズ機能からの投稿作成時の除外
+			} elseif ( preg_match( '/wp-admin\/customize\.php|customize_changeset_uuid/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
+				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
+					if ( ( $request_items['args']['customize_autosaved'] ?? '' ) === 'on' || ( $request_items['args']['wp_customize'] ?? '' ) === 'on' ) {
+						$action = $request_items['args']['action'] ?? '';
+						if ( $action === 'customize-nav-menus-insert-auto-draft' ) {
+							$modify_remove_variables['args'] = array( '/^params/' );
+						}
+					}
+				}
+
+			// nishiki の場合はcontentキーを除外
 			} elseif ( preg_match( '/wp\/v2\/nishiki_pro_(patterns|content)/', $request_items['request_filename'] ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$is_rule_removed = true;
+						$modify_remove_variables['args'] = array( 'content' );
 					}
 				}
 
-			// xeriteルール除外
+			// xerite の場合はcontentキーを除外
 			} elseif ( preg_match( '/wp\/v2\/xw_block_patterns/', $request_items['request_filename'] ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$is_rule_removed = true;
+						$modify_remove_variables['args'] = array( 'content' );
 					}
 				}
 
-			// Lightningルール除外
+			// Lightning の場合はcontentキーを除外
 			} elseif ( preg_match( '/wp\/v2\/(cta|vk-block-patterns)/', $request_items['request_filename'] ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$is_rule_removed = true;
+						$modify_remove_variables['args'] = array( 'content' );
 					}
 				}
 
-			// SWELLルール除外
+			// SWELL の場合はcontentキーを除外
 			} elseif ( preg_match( '/wp\/v2\/(lp|blog_parts)/', $request_items['request_filename'] ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$is_rule_removed = true;
+						$modify_remove_variables['args'] = array( 'content' );
 					}
 				}
 
-			// Advanced Custom Fields除外
-			// カスタム投稿タイプキーは小文字、アンダースコア、ダッシュのみを許容するが、念のためarray_mapで正規表現用にエスケープする
-			} elseif ( preg_match( '/wp\/v2\/(' . implode( '|', array_map( 'preg_quote', $acf_post_types ) ) . ')/', $request_items['request_filename'] ) === 1 ) {
+			// Snow Monkey の場合はcontentキーを除外
+			} elseif ( preg_match( '/wp\/v2\/snow-monkey-search/', $request_items['request_filename'] ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$is_rule_removed = true;
+						$modify_remove_variables['args'] = array( 'content' );
+					}
+				}
+
+			// Advanced Custom Fields の場合はcontentキーを除外
+			// カスタム投稿タイプキーは小文字、アンダースコア、ダッシュのみを許容するが、念のためarray_mapで正規表現用にエスケープする
+			} elseif ( ! empty( $acf_post_types ) && preg_match( '/wp\/v2\/(' . implode( '|', array_map( 'preg_quote', $acf_post_types ) ) . ')/', $request_items['request_filename'] ) === 1 ) {
+				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
+					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
+						$modify_remove_variables['args'] = array( 'content' );
 					}
 				}
 			}
 		}
 
-		if ( isset( $remove_rules['coccon'] ) ) {
-			// cocconルール除外
-			if ( preg_match( '/wp-admin\/admin\.php\?page\=theme-(settings|func-text|ranking|affiliate-tag)/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
-				if ( in_array( $rule_id, $remove_rules['coccon'], true ) ) {
+		// cocoonテーマでの除外処理（theme-func-text, theme-settings, theme-ranking, theme-affiliate-tag）
+		if ( isset( $remove_rules['cocoon'] ) ) {
+			$referer = $_SERVER['HTTP_REFERER'] ?? '';
+			if ( preg_match( '/wp-admin\/admin\.php\?page\=theme-(func-text|settings|ranking|affiliate-tag)/', $referer ) === 1 ) {
+				if ( in_array( $rule_id, $remove_rules['cocoon'], true ) ) {
 					$action = $request_items['args']['action'] ?? '';
 					if ( $action === 'new' || $action === 'edit' ) {
 						$is_rule_removed = true;
@@ -750,7 +812,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 		}
 
 		if ( isset( $remove_rules['vkexunit'] ) ) {
-			// vkExUnitルール除外(メイン設定)
+			// vkExUnitルール除外（メイン設定）
 			if ( preg_match( '/wp-admin\/admin.php\?page\=vkExUnit_main_setting/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['vkexunit'], true ) ) {
 					if ( preg_match( '/page\=vkExUnit_main_setting/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
@@ -759,7 +821,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 				}
 			}
 
-			// vkExUnitルール除外(cssカスタマイズ)
+			// vkExUnitルール除外（cssカスタマイズ）
 			if ( preg_match( '/wp-admin\/admin.php\?page\=vkExUnit_css_customize/', $_SERVER['REQUEST_URI'] ?? '' ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['vkexunit'], true ) ) {
 					$wp_http_referer = $request_items['args']['_wp_http_referer'] ?? '';
@@ -820,7 +882,10 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 				}
 			}
 		}
-		return $is_rule_removed;
+		return array(
+			'is_removed'              => $is_rule_removed,
+			'modify_remove_variables' => $modify_remove_variables,
+		);
 	}
 
 	/**
@@ -915,10 +980,18 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			}
 
 			// 特定の操作の場合、特定のルールを除外する
-			$is_rule_removed = $this->is_remove_rule( $waf_rule['id'], $request_items, $remove_rules, $acf_post_types );
+			$remove_rule_result = $this->is_remove_rule( $waf_rule['id'], $request_items, $remove_rules, $acf_post_types );
 
-			if ( $is_rule_removed ) {
+			if ( $remove_rule_result['is_removed'] ) {
 				continue;
+			}
+
+			// ルールのremove_variablesを動的に変更
+			if ( ! empty( $remove_rule_result['modify_remove_variables'] ) ) {
+				$waf_rule['remove_variables'] = array_merge_recursive(
+					$waf_rule['remove_variables'],
+					$remove_rule_result['modify_remove_variables']
+				);
 			}
 
 			foreach ( $waf_rule['variables'] as $variable ) {

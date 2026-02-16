@@ -19,6 +19,7 @@ require_once __DIR__ . '/update-notice.php';
 require_once __DIR__ . '/captcha.php';
 require_once __DIR__ . '/../really-simple-captcha/really-simple-captcha.php';
 require_once __DIR__ . '/lib/class-time-based-one-time-password.php';
+require_once __DIR__ . '/lib/class-recovery-codes.php';
 require_once __DIR__ . '/login-log.php';
 require_once __DIR__ . '/two-factor-authentication.php';
 require_once __DIR__ . '/server-error-notification.php';
@@ -140,7 +141,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			}
 
 			if ( $this->disable_access_system_file->is_enabled() ) {
-				add_action( 'plugins_loaded', array( $this->disable_access_system_file, 'init' ), 10 );
+				add_action( 'plugins_loaded', array( $this->disable_access_system_file, 'init' ), 11 );
 			}
 
 			add_action( 'wp_login', array( $this->login_log, 'wp_login' ), 1, 1 );
@@ -257,10 +258,19 @@ class CloudSecureWP extends CloudSecureWP_Common {
 				}
 			}
 
+			if ( $this->two_factor_authentication->is_enabled() ) {
+				// 2段階認証のAJAXハンドラー
+				add_action( 'wp_ajax_cloudsecurewp_generate_key', array( $this->two_factor_authentication, 'ajax_generate_key' ) );
+				add_action( 'wp_ajax_cloudsecurewp_generate_key_and_send_email', array( $this->two_factor_authentication, 'ajax_generate_key_and_send_email' ) );
+				add_action( 'wp_ajax_cloudsecurewp_verify_auth_code', array( $this->two_factor_authentication, 'ajax_verify_auth_code' ) );
+				add_action( 'wp_ajax_cloudsecurewp_generate_recovery_codes', array( $this->two_factor_authentication, 'ajax_generate_recovery_codes' ) );
+			}
+
 			if ( $this->two_factor_authentication->is_enabled() && 'xmlrpc.php' !== basename( $_SERVER['SCRIPT_NAME'] ) && ! is_admin() ) {
 				add_filter( 'sanitize_user', array( $this->two_factor_authentication, 'restore_login_name' ), 0, 1 );
 				add_filter( 'authenticate', array( $this->two_factor_authentication, 'restore_login_session' ), 0, 3 );
-				add_filter( 'authenticate', array( $this->two_factor_authentication, 'authenticate_with_two_factor' ), 100, 3 );
+				add_filter( 'authenticate', array( $this->two_factor_authentication, 'two_factor_disable_login_check' ), 100, 3 );
+				add_filter( 'authenticate', array( $this->two_factor_authentication, 'authenticate_with_two_factor' ), 101, 3 );
 				add_action( 'wp_login', array( $this->two_factor_authentication, 'redirect_if_not_two_factor_authentication_registered' ), 10, 2 );
 			}
 
@@ -355,7 +365,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 		add_submenu_page( $slug, 'ログイン履歴', 'ログイン履歴', 'manage_options', $slug . '_login_log', array( $this, 'm_login_log' ) );
 
 		if ( $this->two_factor_authentication->is_enabled_on_screen() ) {
-			add_menu_page( 'デバイス登録', '2段階認証', 'read', $slug . '_two_factor_authentication_registration', array( $this, 'm_two_factor_authentication_registration' ), 'dashicons-lock', 72 );
+			add_menu_page( '2段階認証の設定', '2段階認証の設定', 'read', $slug . '_two_factor_authentication_registration', array( $this, 'm_two_factor_authentication_registration' ), 'dashicons-lock', 72 );
 		}
 	}
 
@@ -678,6 +688,10 @@ class CloudSecureWP extends CloudSecureWP_Common {
 
 		if ( version_compare( $old_version, '1.3.24' ) < 0 ) {
 			$this->htaccess->reorganize_plugin_settings_blocks();
+		}
+
+		if ( version_compare( $old_version, '1.4.0' ) < 0 ) {
+			$this->two_factor_authentication->setup_2fa_tables();
 		}
 
 		$this->config->set( 'version', $now_version );

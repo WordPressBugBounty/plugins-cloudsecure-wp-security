@@ -133,7 +133,8 @@
 
 /* エラーメッセージと完了メッセージ */
 #cloudsecure-wp-security .error-box,
-#cloudsecure-wp-security .success-box {
+#cloudsecure-wp-security .success-box,
+#cloudsecure-wp-security .info-box {
 	position: relative;
 	margin-bottom: 12px;
 	border: 1px solid #f0f0f1;
@@ -149,12 +150,14 @@
 }
 
 #cloudsecure-wp-security .error-box:last-child,
-#cloudsecure-wp-security .success-box:last-child {
+#cloudsecure-wp-security .success-box:last-child,
+#cloudsecure-wp-security .info-box:last-child {
 	margin-bottom: 24px;
 }
 
 #cloudsecure-wp-security .error-box::after,
-#cloudsecure-wp-security .success-box::after {
+#cloudsecure-wp-security .success-box::after,
+#cloudsecure-wp-security .info-box::after {
 	position: absolute;
 	top: 0;
 	left: 0;
@@ -171,12 +174,20 @@
 	background-color: #00a32a;
 }
 
+#cloudsecure-wp-security .info-box::after {
+	background-color: #72aee6;
+}
+
 #cloudsecure-wp-security .error-box.red {
 	background-color: #fbefef;
 }
 
 #cloudsecure-wp-security .success-box.green {
 	background-color: #ebf8ee;
+}
+
+#cloudsecure-wp-security .info-box.blue {
+	background-color: #f0f6fc;
 }
 
 #cloudsecure-wp-security .success-box a{
@@ -242,15 +253,15 @@
 }
 
 #cloudsecure-wp-security .box-row.pb-0 {
-padding-bottom: 0;
+	padding-bottom: 0;
 }
 
 #cloudsecure-wp-security .box-row.flex-start {
-align-items: flex-start;
+	align-items: flex-start;
 }
 
 #cloudsecure-wp-security .box-row:last-child {
-border: none;
+	border: none;
 }
 
 /* boxの各行のタイトル */
@@ -1050,5 +1061,386 @@ border: none;
 
 	#cloudsecure-wp-security .waf-link-button-position a {
 		position: static;
+	}
+}
+/* 以下 2段階認証の認証方法設定ページのスタイル */
+/* ボタン関連 */
+#two-fa-setting-area .button {
+	font-size: 14px !important;
+	line-height: 0 !important;
+	min-height: 32px !important;
+}
+#two-fa-setting-area .button-gray {
+	background-color: #b7b9bc !important;
+	border-color: #b7b9bc !important;
+	color: #fff !important;
+}
+
+#two-fa-setting-area .button-gray:hover {
+	background-color: #9fa2a6 !important;
+	border-color: #9fa2a6 !important;
+}
+
+#two-fa-setting-area .button-blue {
+	background-color: #329FF1 !important;
+	border-color: #329FF1 !important;
+	color: #fff !important;
+}
+#two-fa-setting-area .button-blue:hover {
+	background-color: #2088D6 !important;
+	border-color: #2088D6 !important;
+}
+/* コンテンツスタイル関連 */
+#cloudsecure-wp-security #two-fa-setting-area .box {
+	margin: 0 !important;
+	padding: 0 !important;
+}
+#cloudsecure-wp-security #two-fa-setting-area .box-bottom {
+	padding: 0 24px !important;
+}
+#cloudsecure-wp-security #two-fa-setting-area .box-row {
+	padding: 24px 0 !important;
+}
+#cloudsecure-wp-security #two-fa-setting-area .box-row-title {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+#cloudsecure-wp-security #two-fa-setting-area .status-area {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+/* リカバリーコード説明 */
+#cloudsecure-wp-security #two-fa-setting-area .description-recovery-code {
+	width: 211px;
+	padding: 6px 12px;
+	border-radius: 4px;
+	background-color: #F7F7F8;
+}
+#cloudsecure-wp-security #two-fa-setting-area .description-text {
+	margin: 0;
+	font-size: 11px;
+	font-weight: 400;
+	color: #646970;
+}
+/* アイコン付きステータス表示エリア */
+#two-fa-setting-area .status-registered-back-none {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	color: #00A32A;
+}
+#two-fa-setting-area .status-not-registered-back-none {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	color: #d73a49;
+}
+/* モーダルスタイル関連 */
+#two-fa-setting-area .setting-modal,
+#two-fa-setting-area .confirm-modal {
+	display: none;
+	position: fixed;
+	z-index: 99999;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100dvh;
+	background-color: rgba(0, 0, 0, 0.5);
+}
+#two-fa-setting-area .setting-modal-content,
+#two-fa-setting-area .confirm-modal-content {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background-color: #fff;
+	border-radius: 8px;
+	width: 90%;
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+#two-fa-setting-area .setting-modal-content {
+	max-width: 650px;
+}
+#two-fa-setting-area .confirm-modal-content {
+	max-width: 400px;
+}
+#two-fa-setting-area .setting-modal-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 16px;
+	border-bottom: 1px solid #DBDCDD;
+}
+#two-fa-setting-area .setting-modal-body {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	padding: 24px 24px 32px 24px;
+}
+#two-fa-setting-area .confirm-modal-body {
+	display: flex;
+	flex-direction: column;
+	gap: 32px;
+	padding: 24px;
+}
+#two-fa-setting-area .confirm-message-area {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+#two-fa-setting-area .confirm-message-body {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+#two-fa-setting-area .modal-btn-area-end{
+	display: flex;
+	justify-content: flex-end;
+	gap: 16px;
+}
+#two-fa-setting-area .modal-btn-area-center{
+	display: flex;
+	justify-content: center;
+	gap: 16px;
+}
+#two-fa-setting-area .modal-close {
+	cursor: pointer;
+}
+#cloudsecure-wp-security #two-fa-setting-area h2,
+#two-fa-setting-area .h2-text {
+	margin: 0;
+	font-size: 14px;
+}
+#two-fa-setting-area .modal-text,
+#two-fa-setting-area .status-text {
+	font-size: 13px !important;
+	margin: 0 !important;
+}
+#cloudsecure-wp-security #setting-modal .info-box,
+#cloudsecure-wp-security #setting-modal .error-box {
+	margin: 0 !important;
+	font-size: 13px !important;
+}
+/* 認証方法選択画面モーダル関連 */
+.auth-method-options {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+#cloudsecure-wp-security #two-fa-setting-area .circle-radio {
+	margin: 0 !important;
+	flex-shrink: 0 !important;
+}
+#cloudsecure-wp-security #two-fa-setting-area .circle-radio+label {
+	cursor: pointer !important;
+}
+#cloudsecure-wp-security #two-fa-setting-area .circle-radio+label::after {
+	position: absolute !important;
+	top: 50% !important;
+	transform: translateY(-50%) !important;
+}
+
+#cloudsecure-wp-security #two-fa-setting-area .circle-radio+label::before {
+	position: absolute !important;  
+	top: 50% !important;
+	transform: translateY(-50%) !important;
+}
+#two-fa-setting-area .auth-method-icon,
+#two-fa-setting-area .auth-method-text {
+	vertical-align: middle;
+}
+/* アプリ認証モーダル関連 */
+#two-fa-setting-area .qr-setup-container {
+	display: flex;
+	gap: 32px;
+	padding-left: 8px;
+}
+#two-fa-setting-area #qrcode {
+	display: inline-block;
+}
+#two-fa-setting-area .setup-key-section {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	padding-top: 16px;
+}
+#two-fa-setting-area .input-code-section {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+#two-fa-setting-area .verification-code-email::placeholder,
+#two-fa-setting-area .verification-code-app::placeholder {
+	color: #cccccc;
+}
+#two-fa-setting-area .verification-code-app {
+	width: 160px;
+	height: 38px;
+	padding: 4px 7px;
+	text-align: left;
+	border: 1px solid #DBDCDD;
+	border-radius: 4px;
+}
+/* メール認証モーダル関連 */
+#two-fa-setting-area .verification-code-email {
+	width: 207px;
+	height: 38px;
+	padding: 4px 7px;
+	text-align: left;
+	border: 1px solid #DBDCDD;
+	border-radius: 4px;
+}
+#two-fa-setting-area .resend-email-code-active {
+	pointer-events: auto;
+	color: #2271b1;
+	cursor: pointer;
+}
+#two-fa-setting-area .resend-email-code-inactive {
+	pointer-events: none;
+	color: #646970;
+	cursor: not-allowed;
+	text-decoration: none;
+}
+/* リカバリーコードモーダル関連 */
+#two-fa-setting-area .recovery-modal-body {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	padding-top: 24px;
+}
+#two-fa-setting-area .recovery-modal-body-top {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 0 24px;
+}
+#two-fa-setting-area .recovery-modal-body-bottom {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 16px 24px;
+	background-color: #f0f0f1;
+	border-radius: 0 0 8px 8px;
+}
+#two-fa-setting-area .recovery-text-area {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+#two-fa-setting-area .recovery-text {
+	display: flex;
+	gap: 8px;
+}
+#two-fa-setting-area .recovery-codes-grid {
+	display: grid;
+	grid-template-columns: max-content max-content;
+	justify-content: center;
+	gap: 8px 20px; 				
+	padding: 12px 0;
+	border-radius: 8px;
+	border: 1px solid #D2D2D2;
+}
+#two-fa-setting-area .recovery-code-item {
+	background: none;
+	border: none;				
+	font-family: 'BIZ UDGothic', monospace;
+	font-size: 14px;
+	text-align: center;
+	letter-spacing: 1px;
+}
+#two-fa-setting-area .black-circle {
+	margin-top: 7px;
+	width: 4px;
+	height: 4px;
+	flex-shrink: 0;
+	background-color: black;
+	border-radius: 50%;
+	display: inline-block;
+	vertical-align: middle;
+}
+
+/* タブレット対応 */
+@media (max-width: 1024px) {
+	#cloudsecure-wp-security #two-fa-setting-area .box-row {
+		display: flex !important;
+		flex-direction: column !important;
+		column-gap: 20px !important;
+		align-items: flex-start !important;
+	}
+	#cloudsecure-wp-security #two-fa-setting-area .box-row-title {
+		flex-direction: row !important;
+		width: 100% !important;
+		align-items: center !important;
+	}
+	#cloudsecure-wp-security #two-fa-setting-area .box-row-content {
+		width: 100% !important;
+	}
+	#two-fa-setting-area .pc-only {
+		display: none;
+	}
+	#cloudsecure-wp-security #two-fa-setting-area .description-recovery-code {
+		width: auto;
+		display: inline-block;
+	}
+}
+
+/* スマートフォン対応 */
+@media (max-width: 768px) {
+	#cloudsecure-wp-security #two-fa-setting-area .box-row-title {
+		flex-direction: column !important;
+		width: 100% !important;
+		align-items: flex-start !important;
+	}
+	#cloudsecure-wp-security #two-fa-setting-area .status-area {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+	#cloudsecure-wp-security #two-fa-setting-area .status-area-text,
+	#cloudsecure-wp-security #two-fa-setting-area .status-area-btn {
+		margin-right: auto !important;
+	}
+	#two-fa-setting-area .setting-modal-body {
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
+		padding: 16px 16px 24px 16px;
+		max-height: 510px;
+		overflow: auto;
+	}
+	#two-fa-setting-area .qr-setup-container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 16px;
+	}				
+	#two-fa-setting-area .setup-key-section {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		text-align: center;
+		padding: 0;
+	}
+	#two-fa-setting-area .verification-code-email {
+		width: 180px;
+		height: 38px;
+		padding: 4px 7px;
+		text-align: left;
+		border: 1px solid #DBDCDD;
+		border-radius: 4px;
+	}
+	#two-fa-setting-area .recovery-modal-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+		padding: 0;
+	}
+	#two-fa-setting-area .recovery-modal-body-top {
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
+		padding: 16px 16px 24px 16px;
 	}
 }

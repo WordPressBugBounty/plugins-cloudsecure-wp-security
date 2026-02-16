@@ -50,7 +50,6 @@ class CloudSecureWP_Admin_Two_Factor_Authentication extends CloudSecureWP_Admin_
 				}
 
 				$this->two_factor_authentication->save_settings( $this->datas );
-
 			}
 		}
 
@@ -74,7 +73,10 @@ class CloudSecureWP_Admin_Two_Factor_Authentication extends CloudSecureWP_Admin_
 		</div>
 		<div class="title-bottom-text">
 			ユーザー名とパスワードの入力に加え、別のコードで追加認証を行います。<br />
-			<b>※利用するには、<a class="title-block-link" href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2" target="_blank">Google Authenticator</a> 　アプリケーションでデバイスを登録する必要があります。</b>
+			2段階認証機能を利用するには、各ユーザーが自身で認証方法の設定を行う必要があります。<br />
+			<?php if ( 't' === $this->datas['two_factor_authentication'] ) : ?>
+				<b>※認証方法が未設定の場合は、<a href="<?php echo esc_url( admin_url( 'admin.php?page=cloudsecurewp_two_factor_authentication_registration' ) ); ?>">認証方法の設定</a>を行ってください。</b><br />
+			<?php endif; ?>
 		</div>
 		<?php
 	}
@@ -110,10 +112,11 @@ class CloudSecureWP_Admin_Two_Factor_Authentication extends CloudSecureWP_Admin_
 								<input type="checkbox" class="checkbox" id="<?php echo esc_attr( $role ); ?>" name="roles[]"
 										value="<?php echo esc_attr( $role ); ?>"<?php checked( in_array( $role, $roles ) ); ?> />
 								<label for="<?php echo esc_attr( $role ); ?>"><?php echo esc_html_x( ucfirst( $role ), 'User role' ); ?></label>
-								<?php if ( $key !== $lastkey ) : ?>
-									<br/>
-								<?php endif; ?>
+								<br/>
 							<?php endforeach; ?>
+							<p class="description">
+								ユーザーごとの設定状況（未設定/設定済）は <a href="<?php echo esc_url( admin_url( 'users.php' ) ); ?>">ユーザー一覧</a> 画面で確認してください。
+							</p>
 						</div>
 					</div>
 				</div>

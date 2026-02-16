@@ -5,25 +5,23 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * タイムベースドワンタイムパスワードアルゴリズムの2段階認証のためのクラス
+ * TOTPアルゴリズムの2段階認証のためのクラス
  */
 class CloudSecureWP_Time_Based_One_Time_Password {
-	private static $digits = 6;
+	private static $digits      = 6;
+	private static $discrepancy = 1;
 
 	/**
 	 * 指定されたシークレットと時点を使用してコードを計算
 	 *
-	 * @param string   $secret
-	 * @param int|null $time_slice
+	 * @param string $secret
+	 * @param int    $time_slice
 	 *
 	 * @return string
 	 */
-	public static function get_code( string $secret, int $time_slice = null ): string {
-		if ( $time_slice === null ) {
-			$time_slice = floor( time() / 30 );
-		}
-
-		$secret_key = self::base32_decode( $secret );
+	public static function get_code( string $secret, int $time_slice ): string {
+		// 16進数をバイナリデータに変換
+		$secret_key = hex2bin( $secret );
 
 		// 時間をバイナリ文字列にパック
 		$time = chr( 0 ) . chr( 0 ) . chr( 0 ) . chr( 0 ) . pack( 'N*', $time_slice );
@@ -47,25 +45,22 @@ class CloudSecureWP_Time_Based_One_Time_Password {
 
 	/**
 	 * コードが正しいかどうかを検証
-	 * $discrepancy*30 秒前から今から $discrepancy*30 秒までのコードを受け入れます。
+	 * 前後1つ分の時間スライスを許容
 	 *
-	 * @param string   $secret
-	 * @param string   $code
-	 * @param int      $discrepancy 30 秒単位で許容される時間のずれ (8 は前後 4 分を意味します)
-	 * @param int|null $current_time_slice
+	 * @param string $secret
+	 * @param string $code
+	 * @param int    $time_step 時間間隔（秒）デフォルトは30秒
 	 *
 	 * @return bool
 	 */
-	public static function verify_code( string $secret, string $code, int $discrepancy = 1, int $current_time_slice = null ): bool {
-		if ( $current_time_slice === null ) {
-			$current_time_slice = floor( time() / 30 );
-		}
+	public static function verify_code( string $secret, string $code, int $time_step ): bool {
+		$current_time_slice = floor( time() / $time_step );
 
 		if ( strlen( $code ) !== 6 ) {
 			return false;
 		}
 
-		for ( $i = - $discrepancy; $i <= $discrepancy; ++$i ) {
+		for ( $i = - self::$discrepancy; $i <= self::$discrepancy; ++$i ) {
 			$calculated_code = self::get_code( $secret, $current_time_slice + $i );
 			if ( self::timing_safe_equals( $calculated_code, $code ) ) {
 				return true;
@@ -78,11 +73,11 @@ class CloudSecureWP_Time_Based_One_Time_Password {
 	/**
 	 * Base32をデコード
 	 *
-	 * @param $secret
+	 * @param string $secret
 	 *
 	 * @return bool|string
 	 */
-	protected static function base32_decode( $secret ) {
+	public static function base32_decode( $secret ) {
 		if ( empty( $secret ) ) {
 			return '';
 		}
@@ -149,5 +144,86 @@ class CloudSecureWP_Time_Based_One_Time_Password {
 
 		// $resultが0のとき、同一の文字列となります...
 		return $result === 0;
+	}
+
+	/**
+	 * メール認証用のコードを生成
+	 *
+	 * @param string $secret
+	 * @param int    $time_step 時間間隔（秒）
+	 *
+	 * @return string
+	 */
+	public static function create_code_for_email( string $secret, int $time_step ): string {
+
+		// 現在の時間スライスを計算
+		$time_slice = floor( time() / $time_step );
+
+		// コードを生成
+		return self::get_code( $secret, $time_slice );
+	}
+
+	/**
+	 * Base32エンコード
+	 *
+	 * @param string $binary バイナリデータ
+	 *
+	 * @return string
+	 */
+	public static function base32_encode( string $binary ): string {
+		if ( '' === $binary ) {
+			return '';
+		}
+
+		$base32_chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+		$v            = 0;
+		$vbits        = 0;
+		$ret          = '';
+
+		// 1. 5ビットずつ切り出して変換
+		for ( $i = 0, $j = strlen( $binary ); $i < $j; $i++ ) {
+			$v    <<= 8;
+			$v     += ord( $binary[ $i ] );
+			$vbits += 8;
+
+			while ( $vbits >= 5 ) {
+				$vbits -= 5;
+				$ret   .= $base32_chars[ ( $v >> $vbits ) & 31 ];
+			}
+		}
+
+		// 2. 余ったビットの処理
+		if ( $vbits > 0 ) {
+			$v  <<= ( 5 - $vbits );
+			$ret .= $base32_chars[ $v & 31 ];
+		}
+
+		// 3. RFC 4648 に基づくパディング処理（デコーダーのチェックをパスするために必須）
+		// Base32は8文字（40ビット）単位でブロックを作る必要がある
+		$padding = ( 8 - ( strlen( $ret ) % 8 ) ) % 8;
+		$ret    .= str_repeat( '=', $padding );
+
+		return $ret;
+	}
+
+	/**
+	 * ランダムな秘密鍵を生成
+	 *
+	 * @return array ['hex' => 16進数文字列, 'base32' => Base32文字列]
+	 */
+	public static function generate_secret_key(): array {
+		// ランダムなバイナリデータを生成
+		$binary = random_bytes( 10 );
+
+		// 16進数に変換
+		$hex = bin2hex( $binary );
+
+		// Base32エンコード
+		$base32 = self::base32_encode( $binary );
+
+		return array(
+			'hex'    => $hex,
+			'base32' => $base32,
+		);
 	}
 }

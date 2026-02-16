@@ -11,7 +11,7 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 	private const KEY_SEND_AT            = self::KEY_FEATURE . '_send_at';
 	private const KEY_AVAILABLE_RULES    = self::KEY_FEATURE . '_available_rules';
 	private const RULES_CATEGORY         = self::KEY_FEATURE . '_rules_category';
-	private const RULES_CATEGORY_VARUES  = array( 1, 2, 4, 8, 16 );
+	private const RULES_CATEGORY_VALUES  = array( 1, 2, 4, 8, 16 );
 	private const RULES_CATEGORY_NAMES   = array(
 		'SQLインジェクション',
 		'クロスサイトスクリプティング',
@@ -77,7 +77,7 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 			self::KEY_FEATURE         => 'f',
 			self::KEY_SEND_ADMIN_MAIL => self::SEND_ADMIN_MAIL_VALUES[1],
 			self::KEY_SEND_AT         => array(),
-			self::KEY_AVAILABLE_RULES => 63,
+			self::KEY_AVAILABLE_RULES => 31,
 		);
 
 		return $ret;
@@ -92,13 +92,13 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 	public function get_constant_settings(): array {
 		$ret = array(
 			self::KEY_SEND_ADMIN_MAIL => self::SEND_ADMIN_MAIL_VALUES,
-			self::KEY_AVAILABLE_RULES => self::RULES_CATEGORY_VARUES,
+			self::KEY_AVAILABLE_RULES => self::RULES_CATEGORY_VALUES,
 			self::RULES_CATEGORY      => array(
-				self::RULES_CATEGORY_VARUES[0] => self::RULES_CATEGORY_NAMES[0],
-				self::RULES_CATEGORY_VARUES[1] => self::RULES_CATEGORY_NAMES[1],
-				self::RULES_CATEGORY_VARUES[2] => self::RULES_CATEGORY_NAMES[2],
-				self::RULES_CATEGORY_VARUES[3] => self::RULES_CATEGORY_NAMES[3],
-				self::RULES_CATEGORY_VARUES[4] => self::RULES_CATEGORY_NAMES[4],
+				self::RULES_CATEGORY_VALUES[0] => self::RULES_CATEGORY_NAMES[0],
+				self::RULES_CATEGORY_VALUES[1] => self::RULES_CATEGORY_NAMES[1],
+				self::RULES_CATEGORY_VALUES[2] => self::RULES_CATEGORY_NAMES[2],
+				self::RULES_CATEGORY_VALUES[3] => self::RULES_CATEGORY_NAMES[3],
+				self::RULES_CATEGORY_VALUES[4] => self::RULES_CATEGORY_NAMES[4],
 			),
 		);
 		return $ret;
@@ -276,6 +276,7 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 		$match_access_at = strtotime( $match_results['access_at'] );
 		$settings        = $this->get_settings();
 		$send_at         = $settings[ self::KEY_SEND_AT ] ?? array();
+		$tmp_send_at     = 0;
 
 		if ( ! empty( $send_at ) && is_array( $send_at ) ) {
 			foreach ( $send_at as $key => $val ) {
@@ -284,8 +285,6 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 					break;
 				}
 			}
-		} else {
-			$tmp_send_at = 0;
 		}
 
 		if ( 60 <= $match_access_at - $tmp_send_at || $tmp_send_at === 0 ) {
@@ -319,7 +318,7 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 			'ajax_customize' => array( '950904', '950906', '950004', '950001', '950007' ),
 			'rest_api'       => array( '950004', '950001', '950007', '950006' ),
 			'comment'        => array( '950004' ),
-			'coccon'         => array( '950004' ),
+			'cocoon'         => array( '950004' ),
 			'emanon'         => array( '950004', '950001', '950007' ),
 			'vkexunit'       => array( '950004', '950001', '950007' ),
 			'nishiki'        => array( '950004', '950001', '950007' ),

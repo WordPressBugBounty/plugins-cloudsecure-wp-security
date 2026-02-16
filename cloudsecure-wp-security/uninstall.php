@@ -26,6 +26,8 @@ function cloudsecurewp_uninstall() {
 	$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}cloudsecurewp_login_log" );
 	$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}cloudsecurewp_server_error" );
 	$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}cloudsecurewp_waf_log" );
+	$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}cloudsecurewp_2fa_auth" );
+	$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}cloudsecurewp_2fa_login" );
 }
 
 cloudsecurewp_uninstall();

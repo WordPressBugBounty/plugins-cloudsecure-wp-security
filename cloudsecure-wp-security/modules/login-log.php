@@ -23,14 +23,6 @@ class CloudSecureWP_Login_Log extends CloudSecureWP_Common {
 		self::COLUMN_LOGIN_AT => '日時',
 	);
 
-	private const METHOD_PAGE   = 1;
-	private const METHOD_XMLRPC = 2;
-	// private const METHOD_RESTAPI = 3;
-	private const METHODS = array(
-		self::METHOD_PAGE   => 'ログインページ',
-		self::METHOD_XMLRPC => 'XML-RPC',
-		// self::METHOD_RESTAPI => 'REST API',
-	);
 	private const MAX_LOG = 10000;
 	private $config;
 	private $disable_login;

@@ -30,6 +30,13 @@ class CloudSecureWP_Common {
 		self::LOGIN_STATUS_FAILED   => '失敗',
 		self::LOGIN_STATUS_DISABLED => '無効',
 	);
+
+	protected const METHOD_PAGE   = 1;
+	protected const METHOD_XMLRPC = 2;
+	protected const METHODS       = array(
+		self::METHOD_PAGE   => 'ログインページ',
+		self::METHOD_XMLRPC => 'XML-RPC',
+	);
 	protected $info;
 
 	function __construct( array $info ) {
