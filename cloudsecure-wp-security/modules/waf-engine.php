@@ -625,6 +625,23 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 
 	/**
+	 * REST APIエンドポイントを取得（パーマリンク設定に依存しない）
+	 *
+	 * @param array $request_items
+	 * @return string
+	 */
+	public function get_rest_endpoint( $request_items ): string {
+		// パーマリンクが「基本」の場合はrest_routeパラメータにエンドポイントが含まれる
+		if ( isset( $request_items['args']['rest_route'] ) && is_string( $request_items['args']['rest_route'] ) ) {
+			return $request_items['args']['rest_route'];
+		}
+		
+		// その他のパーマリンク設定の場合はrequest_filenameを使用
+		return $request_items['request_filename'];
+	}
+
+
+	/**
 	 * WordPress管理画面での特定の処理に対し、特定のルールを除外する
 	 *
 	 * @param string $rule_id
@@ -686,8 +703,10 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 		}
 
 		if ( isset( $remove_rules['rest_api'] ) ) {
+			$rest_endpoint = $this->get_rest_endpoint( $request_items );
+			
 			// 投稿・編集（templates, blocks, template-parts, navigation, pages, posts）の場合はcontentキーを除外
-			if ( preg_match( '/templates|blocks|template-parts|navigation|pages|posts/', $request_items['request_filename'] ) === 1 ) {
+			if ( preg_match( '/templates|blocks|template-parts|navigation|pages|posts/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
 						$modify_remove_variables['args'] = array( 'content' );
@@ -695,7 +714,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 				}
 
 			// global-styles の場合はstylesキーを除外
-			} elseif ( preg_match( '/global-styles/', $request_items['request_filename'] ) === 1 ) {
+			} elseif ( preg_match( '/global-styles/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
 						$modify_remove_variables['args'] = array( '/^styles/' );
@@ -703,7 +722,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 				}
 
 			// batch の場合はrequestsキーを除外
-			} elseif ( preg_match( '/batch/', $request_items['request_filename'] ) === 1 ) {
+			} elseif ( preg_match( '/batch/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
 						$modify_remove_variables['args'] = array( '/^requests/' );
@@ -733,7 +752,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 				}
 
 			// nishiki の場合はcontentキーを除外
-			} elseif ( preg_match( '/wp\/v2\/nishiki_pro_(patterns|content)/', $request_items['request_filename'] ) === 1 ) {
+			} elseif ( preg_match( '/wp\/v2\/nishiki_pro_(patterns|content)/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
 						$modify_remove_variables['args'] = array( 'content' );
@@ -741,7 +760,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 				}
 
 			// xerite の場合はcontentキーを除外
-			} elseif ( preg_match( '/wp\/v2\/xw_block_patterns/', $request_items['request_filename'] ) === 1 ) {
+			} elseif ( preg_match( '/wp\/v2\/xw_block_patterns/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
 						$modify_remove_variables['args'] = array( 'content' );
@@ -749,7 +768,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 				}
 
 			// Lightning の場合はcontentキーを除外
-			} elseif ( preg_match( '/wp\/v2\/(cta|vk-block-patterns)/', $request_items['request_filename'] ) === 1 ) {
+			} elseif ( preg_match( '/wp\/v2\/(cta|vk-block-patterns)/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
 						$modify_remove_variables['args'] = array( 'content' );
@@ -757,7 +776,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 				}
 
 			// SWELL の場合はcontentキーを除外
-			} elseif ( preg_match( '/wp\/v2\/(lp|blog_parts)/', $request_items['request_filename'] ) === 1 ) {
+			} elseif ( preg_match( '/wp\/v2\/(lp|blog_parts)/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
 						$modify_remove_variables['args'] = array( 'content' );
@@ -765,7 +784,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 				}
 
 			// Snow Monkey の場合はcontentキーを除外
-			} elseif ( preg_match( '/wp\/v2\/snow-monkey-search/', $request_items['request_filename'] ) === 1 ) {
+			} elseif ( preg_match( '/wp\/v2\/snow-monkey-search/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
 						$modify_remove_variables['args'] = array( 'content' );
@@ -774,7 +793,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 			// Advanced Custom Fields の場合はcontentキーを除外
 			// カスタム投稿タイプキーは小文字、アンダースコア、ダッシュのみを許容するが、念のためarray_mapで正規表現用にエスケープする
-			} elseif ( ! empty( $acf_post_types ) && preg_match( '/wp\/v2\/(' . implode( '|', array_map( 'preg_quote', $acf_post_types ) ) . ')/', $request_items['request_filename'] ) === 1 ) {
+			} elseif ( ! empty( $acf_post_types ) && preg_match( '/wp\/v2\/(' . implode( '|', array_map( 'preg_quote', $acf_post_types ) ) . ')/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
 						$modify_remove_variables['args'] = array( 'content' );
