@@ -649,7 +649,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	 * @param array  $remove_rules
 	 * @return array
 	 */
-	public function is_remove_rule( $rule_id, $request_items, $remove_rules, $acf_post_types ): array {
+	public function is_remove_rule( $rule_id, $request_items, $remove_rules, $acf_post_types, $cptui_post_types ): array {
 		$is_rule_removed         = false;
 		$modify_remove_variables = array();
 
@@ -794,6 +794,15 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			// Advanced Custom Fields の場合はcontentキーを除外
 			// カスタム投稿タイプキーは小文字、アンダースコア、ダッシュのみを許容するが、念のためarray_mapで正規表現用にエスケープする
 			} elseif ( ! empty( $acf_post_types ) && preg_match( '/wp\/v2\/(' . implode( '|', array_map( 'preg_quote', $acf_post_types ) ) . ')/', $rest_endpoint ) === 1 ) {
+				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
+					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
+						$modify_remove_variables['args'] = array( 'content' );
+					}
+				}
+
+			// Custom Post Type UI の場合はcontentキーを除外
+			// カスタム投稿タイプキーは小文字、アンダースコア、ダッシュのみを許容するが、念のためarray_mapで正規表現用にエスケープする
+			} elseif ( ! empty( $cptui_post_types ) && preg_match( '/wp\/v2\/(' . implode( '|', array_map( 'preg_quote', $cptui_post_types ) ) . ')/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
 						$modify_remove_variables['args'] = array( 'content' );
@@ -946,6 +955,36 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 
 	/**
+	 * Custom Post Type UIプラグイン除外対応
+	 * 有効なカスタム投稿タイプキーを取得する
+	 *
+	 * @return array
+	 */
+	public function get_cptui_post_types(): array {
+		$active_plugins   = get_option( 'active_plugins' );
+		$cptui_post_types = array();
+
+		if ( is_array( $active_plugins ) && preg_match( '/custom-post-type-ui/', implode( ',', $active_plugins ) ) ) {
+			$cptui_data = get_option( 'cptui_post_types' );
+
+			if ( is_string( $cptui_data ) ) {
+				$cptui_data = unserialize( $cptui_data, [ 'allowed_classes' => false ] );
+			}
+
+			if ( is_array( $cptui_data ) ) {
+				foreach ( $cptui_data as $post_type ) {
+					if ( is_array( $post_type ) && isset( $post_type['name'] ) ) {
+						$cptui_post_types[] = $post_type['name'];
+					}
+				}
+			}
+		}
+
+		return $cptui_post_types;
+	}
+
+
+	/**
 	 * waf_engine
 	 *
 	 * @param array $waf_rules
@@ -965,6 +1004,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 		// Advanced Custom Fieldsプラグイン除外対応で追加
 		$acf_post_types = $this->get_acf_post_types();
+		// Custom Post Type UIプラグイン除外対応で追加
+		$cptui_post_types = $this->get_cptui_post_types();
 
 		foreach ( $waf_rules as $waf_rule ) {
 			// 前回マッチしたルールからskipの設定を引き継いでいる場合はスキップ
@@ -999,7 +1040,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			}
 
 			// 特定の操作の場合、特定のルールを除外する
-			$remove_rule_result = $this->is_remove_rule( $waf_rule['id'], $request_items, $remove_rules, $acf_post_types );
+			$remove_rule_result = $this->is_remove_rule( $waf_rule['id'], $request_items, $remove_rules, $acf_post_types, $cptui_post_types );
 
 			if ( $remove_rule_result['is_removed'] ) {
 				continue;
