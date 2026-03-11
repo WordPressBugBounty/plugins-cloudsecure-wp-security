@@ -276,9 +276,9 @@ class CloudSecureWP_CAPTCHA extends CloudSecureWP_Common {
 	 *
 	 * @return bool
 	 */
-	public function check_captcha(): bool {
+	public function check_captcha( bool $remove_on_failure = true ): bool {
 		if ( ! empty( $_POST ) && check_admin_referer( $this->get_feature_key() . '_csrf', 'cloudsecurewp_captcha_wpnonce' ) ) {
-			return $this->captcha->check( sanitize_text_field( $_POST[ self::PREFIX_FORM_NAME ] ?? '' ), sanitize_text_field( $_POST[ self::CAPTCHA_FORM_NAME ] ?? '' ) );
+			return $this->captcha->check( sanitize_text_field( $_POST[ self::PREFIX_FORM_NAME ] ?? '' ), sanitize_text_field( $_POST[ self::CAPTCHA_FORM_NAME ] ?? '' ), $remove_on_failure );
 		}
 
 		return false;
@@ -328,7 +328,7 @@ class CloudSecureWP_CAPTCHA extends CloudSecureWP_Common {
 	 * コメントフォーム画像認証チェック
 	 */
 	public function preprocess_comment( $comment_data ) {
-		if ( is_admin() || $this->check_captcha() ) {
+		if ( is_admin() || $this->check_captcha( false ) ) {
 			return $comment_data;
 		}
 

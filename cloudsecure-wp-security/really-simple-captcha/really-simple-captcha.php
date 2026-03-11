@@ -206,10 +206,11 @@ class CloudSecureWP_ReallySimpleCaptcha {
 	 *
 	 * @param string $prefix File prefix used for both files
 	 * @param string $response CAPTCHA response
+	 * @param bool   $remove_on_failure Whether to remove temporary files on failure. Default true.
 	 *
 	 * @return bool Return true if the two match, otherwise return false.
 	 */
-	public function check( string $prefix, string $response ): bool {
+	public function check( string $prefix, string $response, bool $remove_on_failure = true ): bool {
 		if ( 0 === strlen( $prefix ) ) {
 			return false;
 		}
@@ -228,10 +229,14 @@ class CloudSecureWP_ReallySimpleCaptcha {
 			$hash = $code[1];
 
 			if ( hash_equals( $hash, hash_hmac( 'md5', $response, $salt ) ) ) {
+				$this->remove( $prefix );
 				return true;
 			}
 		}
 
+		if ( $remove_on_failure ) {
+			$this->remove( $prefix );
+		}
 		return false;
 	}
 
