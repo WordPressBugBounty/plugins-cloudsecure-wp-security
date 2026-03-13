@@ -45,7 +45,7 @@ class CloudSecureWP_ReallySimpleCaptcha {
 		$this->chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 		/* Length of a word in an image */
-		$this->char_length = 4;
+		$this->char_length = 6;
 
 		/* Array of fonts. Randomly picked up per character */
 		$this->fonts = array(
@@ -59,7 +59,7 @@ class CloudSecureWP_ReallySimpleCaptcha {
 		$this->tmp_dir = path_join( __DIR__, 'tmp' );
 
 		/* Array of CAPTCHA image size. Width and height */
-		$this->img_size = array( 72, 24 );
+		$this->img_size = array( 100, 24 );
 
 		/* Background color of CAPTCHA image. RGB color 0-255 */
 		$this->bg = array( 255, 255, 255 );
@@ -95,7 +95,7 @@ class CloudSecureWP_ReallySimpleCaptcha {
 		$word = '';
 
 		for ( $i = 0; $i < $this->char_length; $i++ ) {
-			$pos   = mt_rand( 0, strlen( $this->chars ) - 1 );
+			$pos   = random_int( 0, strlen( $this->chars ) - 1 );
 			$char  = $this->chars[ $pos ];
 			$word .= $char;
 		}
@@ -131,24 +131,34 @@ class CloudSecureWP_ReallySimpleCaptcha {
 
 			imagefill( $im, 0, 0, $bg );
 
-			$x = $this->base[0] + mt_rand( -2, 2 );
+			$x = $this->base[0] + random_int( -2, 2 );
 
 			for ( $i = 0; $i < strlen( $word ); $i++ ) {
-				$font = $this->fonts[ array_rand( $this->fonts ) ];
+				$font = $this->fonts[ random_int( 0, count( $this->fonts ) - 1 ) ];
 				$font = wp_normalize_path( $font );
 
 				imagettftext(
 					$im,
 					$this->font_size,
-					mt_rand( -12, 12 ),
+					random_int( -25, 25 ),
 					$x,
-					$this->base[1] + mt_rand( -2, 2 ),
+					$this->base[1] + random_int( -2, 2 ),
 					$fg,
 					$font,
 					$word[ $i ]
 				);
 
 				$x += $this->font_char_width;
+			}
+
+			/* ドットノイズの追加 */
+			for ( $i = 0; $i < 100; $i++ ) {
+				imagesetpixel( $im, random_int( 0, $this->img_size[0] - 1 ), random_int( 0, $this->img_size[1] - 1 ), $fg );
+			}
+
+			/* ラインノイズの追加 */
+			for ( $i = 0; $i < 2; $i++ ) {
+				imageline( $im, 0, random_int( 0, $this->img_size[1] - 1 ), $this->img_size[0] - 1, random_int( 0, $this->img_size[1] - 1 ), $fg );
 			}
 
 			switch ( $this->img_type ) {

@@ -22,6 +22,7 @@ class CloudSecureWP_CAPTCHA extends CloudSecureWP_Common {
 	private $config;
 	private $captcha;
 	private $allowed_html;
+	private $comment_captcha_displayed = false;
 
 	function __construct( array $info, CloudSecureWP_Config $config ) {
 		parent::__construct( $info );
@@ -322,13 +323,14 @@ class CloudSecureWP_CAPTCHA extends CloudSecureWP_Common {
 	 */
 	public function comment_form_default_fields() {
 		echo wp_kses( $this->create_captcha(), $this->allowed_html );
+		$this->comment_captcha_displayed = true;
 	}
 
 	/**
 	 * コメントフォーム画像認証チェック
 	 */
 	public function preprocess_comment( $comment_data ) {
-		if ( is_admin() || $this->check_captcha( false ) ) {
+		if ( is_admin() || $this->check_captcha() ) {
 			return $comment_data;
 		}
 
@@ -366,6 +368,29 @@ class CloudSecureWP_CAPTCHA extends CloudSecureWP_Common {
 	public function register_post( $username, $email, $errors ) {
 		if ( ! $this->check_captcha() ) {
 			$errors->add( self::CAPTCHA_FORM_NAME, self::CAPTCHA_ERROR_MESSAGE );
+		}
+	}
+
+	/**
+	 * コメントフォーム：ブラウザの「戻る」操作時に画像認証を更新するスクリプト出力
+	 * Bfcache からの復元（event.persisted）または back_forward ナビゲーションを検知してリロードする。
+	 */
+	public function comment_captcha_reload_script(): void {
+		if ( $this->comment_captcha_displayed ) {
+			?>
+			<script>
+			window.addEventListener('pageshow', function(event) {
+				var isBackForward = false;
+				if (window.performance && typeof performance.getEntriesByType === 'function') {
+					var perfEntries = performance.getEntriesByType('navigation');
+					isBackForward = perfEntries.length > 0 && perfEntries[0].type === 'back_forward';
+				}
+				if (event.persisted || isBackForward) {
+					window.location.reload();
+				}
+			});
+			</script>
+			<?php
 		}
 	}
 }

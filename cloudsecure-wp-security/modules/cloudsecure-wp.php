@@ -245,6 +245,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 					add_action( 'comment_form_logged_in_after', array( $this->captcha, 'comment_form_default_fields' ), 1 );
 					add_action( 'comment_form_after_fields', array( $this->captcha, 'comment_form_default_fields' ) );
 					add_filter( 'preprocess_comment', array( $this->captcha, 'preprocess_comment' ) );
+					add_action( 'wp_footer', array( $this->captcha, 'comment_captcha_reload_script' ) );
 				}
 
 				if ( $this->captcha->is_lost_password_form_enabled() ) {
