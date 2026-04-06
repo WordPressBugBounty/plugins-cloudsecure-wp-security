@@ -247,8 +247,12 @@ class CloudSecureWP_CAPTCHA extends CloudSecureWP_Common {
 	 * @return string
 	 */
 	function create_captcha(): string {
-		$word   = $this->captcha->generate_random_word();
-		$prefix = mt_rand();
+		$word = $this->captcha->generate_random_word();
+		try {
+			$prefix = random_int( 0, PHP_INT_MAX );
+		} catch ( Exception $e ) {
+			$prefix = wp_rand( 0, PHP_INT_MAX );
+		}
 		$this->captcha->generate_image( $prefix, $word );
 
 		$captcha  = '<p class="cloudsecure-wp-captcha-block">' . "\n";
@@ -278,7 +282,7 @@ class CloudSecureWP_CAPTCHA extends CloudSecureWP_Common {
 	 * @return bool
 	 */
 	public function check_captcha( bool $remove_on_failure = true ): bool {
-		if ( ! empty( $_POST ) && check_admin_referer( $this->get_feature_key() . '_csrf', 'cloudsecurewp_captcha_wpnonce' ) ) {
+		if ( ! empty( $_POST ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['cloudsecurewp_captcha_wpnonce'] ?? '' ) ), $this->get_feature_key() . '_csrf' ) ) {
 			return $this->captcha->check( sanitize_text_field( $_POST[ self::PREFIX_FORM_NAME ] ?? '' ), sanitize_text_field( $_POST[ self::CAPTCHA_FORM_NAME ] ?? '' ), $remove_on_failure );
 		}
 

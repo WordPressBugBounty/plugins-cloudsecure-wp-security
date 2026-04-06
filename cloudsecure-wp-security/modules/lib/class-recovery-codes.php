@@ -67,8 +67,8 @@ class CloudSecureWP_Recovery_Codes {
 		global $wpdb;
 		$table_name = $wpdb->prefix . 'cloudsecurewp_2fa_auth';
 
-		// 配列をシリアライズ
-		$serialized_codes = serialize( $hashed_codes );
+		// 配列をJSON形式にエンコード
+		$json_codes = wp_json_encode( $hashed_codes );
 
 		// レコードが存在するかチェック
 		$sql = "SELECT 1 FROM $table_name WHERE user_id = %d";
@@ -80,7 +80,7 @@ class CloudSecureWP_Recovery_Codes {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 			$result = $wpdb->update(
 				$table_name,
-				array( 'recovery' => $serialized_codes ),
+				array( 'recovery' => $json_codes ),
 				array( 'user_id' => $user_id ),
 				array( '%s' ),
 				array( '%d' )
@@ -130,13 +130,22 @@ class CloudSecureWP_Recovery_Codes {
 		// DBからコードを取得
 		$sql = "SELECT recovery FROM {$wpdb->prefix}cloudsecurewp_2fa_auth WHERE user_id = %d";
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-		$serialized_codes = $wpdb->get_var( $wpdb->prepare( $sql, $user_id ) );
-		if ( ! $serialized_codes ) {
+		$stored_value = $wpdb->get_var( $wpdb->prepare( $sql, $user_id ) );
+		if ( ! $stored_value ) {
 			return false;
 		}
 
-		// シリアライズされた配列をデコード
-		$stored_codes = unserialize( $serialized_codes );
+		// JSON形式を優先でデコード（新形式）
+		$stored_codes = json_decode( $stored_value, true );
+		if ( is_array( $stored_codes ) ) {
+			return $stored_codes;
+		}
+
+		// フォールバック：serialize形式をデコード（旧形式）
+		if ( ! is_serialized( $stored_value ) ) {
+			return false;
+		}
+		$stored_codes = unserialize( $stored_value, array( 'allowed_classes' => false ) );
 		if ( ! $stored_codes || ! is_array( $stored_codes ) ) {
 			return false;
 		}
@@ -182,8 +191,8 @@ class CloudSecureWP_Recovery_Codes {
 			if ( wp_check_password( $normalized_code, $stored_code ) ) {
 				// コードを使用済みとして削除
 				unset( $stored_codes[ $index ] );
-				// DBを更新
-				self::save_codes( $user_id, $stored_codes );
+				// DBを更新（array_values でインデックスを再構築し、JSON配列形式を維持する）
+				self::save_codes( $user_id, array_values( $stored_codes ) );
 				return true;
 			}
 		}

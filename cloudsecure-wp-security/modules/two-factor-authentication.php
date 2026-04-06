@@ -240,7 +240,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 				<?php endif; ?>
 				<input type="hidden" name="login_token" value="<?php echo esc_attr( $login_token ); ?>">
 				<input type="hidden" name="redirect_to"
-						value="<?php echo esc_attr( sanitize_text_field( $_REQUEST['redirect_to'] ?? admin_url() ) ); ?>"/>
+						value="<?php echo esc_attr( wp_validate_redirect( wp_unslash( $_REQUEST['redirect_to'] ?? '' ), admin_url() ) ); ?>"/>
 				<input type="hidden" name="testcookie" value="1"/>
 				<?php if ( $auth_method === self::USER_AUTH_METHOD_RECOVERY ) : ?>
 					<!-- リカバリーコード入力フォーム -->
@@ -708,8 +708,10 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			return $user;
 		}
 
-		// CSRFトークンを検証（失敗すると「辿ったリンクは期限が切れています。」のエラー画面を表示し処理終了）
-		check_admin_referer( $this->get_feature_key() . '_csrf' );
+		// CSRFトークンを検証
+		if ( wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ?? '' ) ), $this->get_feature_key() . '_csrf' ) === false ) {
+			return new WP_Error( 'empty_username', 'セッションの有効期限が切れました。再度ログインしてください。' );
+		}
 
 		// ログイントークンを取得
 		$login_token = sanitize_text_field( $_POST['login_token'] ?? '' );
@@ -892,7 +894,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		}
 
 		// 2段階認証成功の場合
-		if ( $this->verify_2fa_code( $user->ID, $auth_code, $_POST['auth_method'] ) ) {
+		if ( $this->verify_2fa_code( $user->ID, $auth_code, intval( $_POST['auth_method'] ) ) ) {
 			// 失敗回数をリセット
 			$this->reset_fail_count();
 			// セッションデータを削除
@@ -919,9 +921,9 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		// 2FA画面を再表示して、処理終了
 		$this->show_two_factor_form(
 			$login_token,
-			$_POST['auth_method'],
-			$_POST['has_recovery'],
-			$_POST['email_address'],
+			intval( $_POST['auth_method'] ),
+			(bool) $_POST['has_recovery'],
+			sanitize_email( wp_unslash( $_POST['email_address'] ?? '' ) ),
 			false
 		);
 	}
@@ -980,8 +982,13 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		$delete_option_names = array();
 
 		foreach ( $options as $option ) {
+			// シリアライズ形式でない場合はスキップ
+			if ( ! is_serialized( $option->option_value ) ) {
+				continue;
+			}
+
 			// option_valueを連想配列に変換
-			$data = maybe_unserialize( $option->option_value );
+			$data = unserialize( $option->option_value, array( 'allowed_classes' => false ) );
 
 			// 配列でない場合はスキップ
 			if ( ! is_array( $data ) ) {
@@ -1239,8 +1246,19 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 		$row = $wpdb->get_row( $wpdb->prepare( $sql, $user_id ), ARRAY_A );
 
-		if ( ! empty( $row ) && isset( $row['recovery'] ) ) {
-			$row['recovery'] = maybe_unserialize( $row['recovery'] );
+		if ( ! empty( $row ) && isset( $row['recovery'] ) && is_string( $row['recovery'] ) ) {
+			// JSON形式を優先でデコード（新形式）
+			$decoded = json_decode( $row['recovery'], true );
+			if ( is_array( $decoded ) ) {
+				$row['recovery'] = $decoded;
+			} elseif ( is_serialized( $row['recovery'] ) ) {
+				// フォールバック：serialize形式をデコード（旧形式）
+				$unserialized    = unserialize( $row['recovery'], array( 'allowed_classes' => false ) );
+				$row['recovery'] = is_array( $unserialized ) ? $unserialized : null;
+			} else {
+				// JSON でも serialize でもない場合は null を設定
+				$row['recovery'] = null;
+			}
 		}
 
 		return $row ?? array();
@@ -1744,6 +1762,135 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	}
 
 	/**
+	 * リカバリーコードをserialize形式からJSON形式に一括変換
+	 *
+	 * @return void
+	 */
+	public function migrate_recovery_codes_to_json(): void {
+		global $wpdb;
+
+		$last_user_id = 0;
+
+		while ( true ) {
+			try {
+				// serialize形式のリカバリーコードをバッチ取得
+				$rows = $this->fetch_serialized_recovery_codes( $last_user_id, self::CLEANUP_BATCH_SIZE );
+
+				// 取得するレコードがなくなったら終了
+				if ( empty( $rows ) ) {
+					break;
+				}
+
+				// 最後に取得したuser_idを更新
+				$last_user_id = end( $rows )->user_id;
+
+				// トランザクション開始
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+				$wpdb->query( 'START TRANSACTION' );
+
+				// バッチ単位で変換
+				$this->convert_recovery_codes_batch( $rows );
+
+				// トランザクションコミット
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+				$wpdb->query( 'COMMIT' );
+
+			} catch ( Exception $e ) {
+				// エラー発生時はロールバック
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+				$wpdb->query( 'ROLLBACK' );
+				break;
+			}
+		}
+	}
+
+	/**
+	 * serialize形式のリカバリーコードを持つレコードをバッチ取得
+	 *
+	 * @param int $last_user_id
+	 * @param int $limit
+	 *
+	 * @return array
+	 */
+	private function fetch_serialized_recovery_codes( int $last_user_id, int $limit ): array {
+		global $wpdb;
+
+		$table_name = $wpdb->prefix . self::AUTH_TABLE_NAME;
+
+		// JSON配列は '[' で始まるため、それ以外（serialize形式は 'a:' で始まる）を抽出
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT user_id, recovery FROM {$table_name} WHERE recovery IS NOT NULL AND recovery NOT LIKE %s AND user_id > %d ORDER BY user_id ASC LIMIT %d",
+				$wpdb->esc_like( '[' ) . '%',
+				$last_user_id,
+				$limit
+			)
+		);
+
+		return $rows ?? array();
+	}
+
+	/**
+	 * リカバリーコードをserialize形式からJSON形式に変換して更新
+	 *
+	 * @param array $rows
+	 *
+	 * @return void
+	 * @throws Exception 変換エラー発生時.
+	 */
+	private function convert_recovery_codes_batch( array $rows ): void {
+		global $wpdb;
+
+		$table_name = $wpdb->prefix . self::AUTH_TABLE_NAME;
+
+		$case_parts = array();
+		$values     = array();
+		$user_ids   = array();
+
+		foreach ( $rows as $row ) {
+			if ( ! is_serialized( $row->recovery ) ) {
+				continue;
+			}
+			$codes = unserialize( $row->recovery, array( 'allowed_classes' => false ) );
+
+			if ( ! is_array( $codes ) ) {
+				continue;
+			}
+
+			$json_codes = wp_json_encode( array_values( $codes ) );
+			if ( $json_codes === false ) {
+				continue;
+			}
+			$case_parts[] = 'WHEN %d THEN %s';
+			$values[]     = $row->user_id;
+			$values[]     = $json_codes;
+			$user_ids[]   = $row->user_id;
+		}
+
+		if ( empty( $user_ids ) ) {
+			return;
+		}
+
+		$case_sql        = implode( ' ', $case_parts );
+		$id_placeholders = implode( ', ', array_fill( 0, count( $user_ids ), '%d' ) );
+		$values          = array_merge( $values, $user_ids );
+
+		// SQL実行（バルクアップデートを行うため、意図的に直接クエリを実行する）
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$result = $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$table_name} SET recovery = CASE user_id {$case_sql} END WHERE user_id IN ({$id_placeholders})",
+				$values
+			)
+		);
+
+		if ( $result === false || ! empty( $wpdb->last_error ) ) {
+			throw new Exception( 'Failed to bulk update recovery codes: ' . $wpdb->last_error );
+		}
+	}
+
+	/**
 	 * 2faログインテーブル作成
 	 *
 	 * @return void
@@ -1751,7 +1898,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	private function create_login_table(): void {
 		global $wpdb;
 		$table_name = $wpdb->prefix . self::LOGIN_TABLE_NAME;
-		$table      = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
+		$table      = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table_name ) ) );
 
 		if ( is_null( $table ) ) {
 			$charset_collate = $wpdb->get_charset_collate();
@@ -1777,7 +1924,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	private function create_auth_table(): void {
 		global $wpdb;
 		$table_name = $wpdb->prefix . self::AUTH_TABLE_NAME;
-		$table      = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
+		$table      = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table_name ) ) );
 
 		if ( is_null( $table ) ) {
 			$charset_collate = $wpdb->get_charset_collate();
@@ -1874,6 +2021,10 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		// nonceチェック
 		check_ajax_referer( $this->get_feature_key() . '_csrf', 'nonce', true );
 
+		if ( ! current_user_can( 'read' ) ) {
+			wp_send_json_error();
+		}
+
 		// 秘密鍵を生成
 		$secret_key_data = CloudSecureWP_Time_Based_One_Time_Password::generate_secret_key();
 
@@ -1888,6 +2039,10 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	public function ajax_generate_key_and_send_email(): void {
 		// nonceチェック
 		check_ajax_referer( $this->get_feature_key() . '_csrf', 'nonce', true );
+
+		if ( ! current_user_can( 'read' ) ) {
+			wp_send_json_error();
+		}
 
 		// 返却JSONレスポンス初期化
 		$json_response = [
@@ -1937,6 +2092,10 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	public function ajax_verify_auth_code(): void {
 		// nonceチェック
 		check_ajax_referer( $this->get_feature_key() . '_csrf', 'nonce', true );
+
+		if ( ! current_user_can( 'read' ) ) {
+			wp_send_json_error();
+		}
 
 		// 返却JSONレスポンス初期化
 		$json_response = [
@@ -2005,6 +2164,10 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	public function ajax_generate_recovery_codes(): void {
 		// nonceチェック
 		check_ajax_referer( $this->get_feature_key() . '_csrf', 'nonce', true );
+
+		if ( ! current_user_can( 'read' ) ) {
+			wp_send_json_error();
+		}
 
 		// 返却JSONレスポンス初期化
 		$json_response = [

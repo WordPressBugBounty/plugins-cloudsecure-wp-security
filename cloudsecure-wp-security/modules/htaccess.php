@@ -53,7 +53,7 @@ class CloudSecureWP_Htaccess extends CloudSecureWP_Common {
 	 */
 	public function save_contents( string $contents ): bool {
 		if ( ! empty( $contents ) ) {
-			if ( @file_put_contents( self::FILE_PATH, $contents ) ) {
+			if ( @file_put_contents( self::FILE_PATH, $contents, LOCK_EX ) ) {
 				return true;
 			}
 		}

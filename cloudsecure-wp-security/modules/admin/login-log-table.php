@@ -201,7 +201,7 @@ class CloudSecureWP_Login_Log_Table extends WP_List_Table {
 			if ( (string) $condition === (string) $key ) {
 				$selected = ' selected';
 			}
-			$options .= '<option value="' . $key . '"' . $selected . '>' . $val . '</option>';
+			$options .= '<option value="' . esc_attr( $key ) . '"' . $selected . '>' . esc_html( $val ) . '</option>';
 		}
 		return $options . "\n";
 	}

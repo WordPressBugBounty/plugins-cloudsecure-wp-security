@@ -339,7 +339,9 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 		</template>
 
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
-				type="text/javascript"></script>
+				integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA=="
+				crossorigin="anonymous"
+				referrerpolicy="no-referrer"></script>
 		<script type="text/javascript">
 			const messageRegist           = '認証方法の設定が完了しました。'; 
 			const messageUpdate           = '認証方法の変更が完了しました。';
@@ -349,6 +351,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 			const messageEmailCodeEmpty   = '認証に失敗しました。メールで送信された認証コードを入力してください';
 			const messageEmailCodeInvalid = '認証に失敗しました。認証コードが間違っているか、有効期限が切れています。';
 			const messageEmailSent        = '認証コードを再送信しました。メールをご確認ください。';
+			const messageQRCodeError      = 'QRコードの生成に失敗しました。セットアップキーを手動で入力してください。';
 			const ajaxUrl                 = document.getElementById('ajax-url').value;
 
 			let emailSentTime    = null;
@@ -527,19 +530,23 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 				qrcodeInstance = null;
 
 				// 新しいQRCodeインスタンスを作成
-				qrcodeInstance = new QRCode(qrcodeElement, {
-					correctLevel: QRCode.CorrectLevel.M,
-					width: 200,
-					height: 200
-				});
+				try {
+					qrcodeInstance = new QRCode(qrcodeElement, {
+						correctLevel: QRCode.CorrectLevel.M,
+						width: 200,
+						height: 200
+					});
 
-				// ユーザー名を取得
-				const nameElement = document.querySelector('.display-name');
-				const name = nameElement ? nameElement.textContent : 'User';
+					// ユーザー名を取得
+					const nameElement = document.querySelector('.display-name');
+					const name = nameElement ? nameElement.textContent : 'User';
 
-				// QRコードを生成
-				const otpauthUrl = `otpauth://totp/${encodeURIComponent(name)}?secret=${key}&issuer=${location.hostname}`;
-				qrcodeInstance.makeCode(otpauthUrl);
+					// QRコードを生成
+					const otpauthUrl = `otpauth://totp/${encodeURIComponent(name)}?secret=${key}&issuer=${location.hostname}`;
+					qrcodeInstance.makeCode(otpauthUrl);
+				} catch (e) {
+					showModalError(messageQRCodeError);
+				}
 
 				// セットアップキーを表示
 				if (setupKeyDisplay) {

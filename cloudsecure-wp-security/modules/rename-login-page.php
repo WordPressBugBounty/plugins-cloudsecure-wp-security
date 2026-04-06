@@ -99,9 +99,15 @@ class CloudSecureWP_Rename_Login_Page extends CloudSecureWP_Common {
 	public function get_new_name(): string {
 		$name  = '';
 		$chars = '0123456789abcdefghijklmnopqrstuvwxyz-_';
+		$max   = strlen( $chars ) - 1;
 
 		for ( $ii = 0; $ii < 8; $ii ++ ) {
-			$name .= $chars[ rand( 0, strlen( $chars ) - 1 ) ];
+			try {
+				$index = random_int( 0, $max );
+			} catch ( Exception $e ) {
+				$index = wp_rand( 0, $max );
+			}
+			$name .= $chars[ $index ];
 		}
 
 		return $name;
@@ -185,7 +191,7 @@ class CloudSecureWP_Rename_Login_Page extends CloudSecureWP_Common {
 		$request_uri = sanitize_url( $_SERVER['REQUEST_URI'] ?? '' );
 		if ( false !== strpos( $request_uri, 'wp-login.php' ) ) {
 			if ( false !== strpos( wp_get_referer(), $this->config->get( self::KEY_NAME ) ) ) {
-				wp_redirect( $this->replace_wp_login( $request_uri ) );
+				wp_safe_redirect( $this->replace_wp_login( $request_uri ) );
 				exit;
 			} else {
 				$this->page404();

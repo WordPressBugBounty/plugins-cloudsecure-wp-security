@@ -695,6 +695,10 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			$this->two_factor_authentication->setup_2fa_tables();
 		}
 
+		if ( version_compare( $old_version, '1.4.6' ) < 0 ) {
+			$this->two_factor_authentication->migrate_recovery_codes_to_json();
+		}
+
 		$this->config->set( 'version', $now_version );
 		$this->config->save();
 	}

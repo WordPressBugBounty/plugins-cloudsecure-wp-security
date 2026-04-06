@@ -168,7 +168,7 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 	public function create_table(): void {
 		global $wpdb;
 		$table_name      = $this->get_table_name();
-		$table           = $wpdb->get_var( "SHOW TABLES LIKE '{$table_name}'" );
+		$table           = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table_name ) ) );
 		$charset_collate = $wpdb->get_charset_collate();
 
 		if ( ! is_null( $table ) ) {
@@ -255,9 +255,11 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 	 */
 	public function get_block_history( $orderby, $order, $per_page, $offset ): array {
 		global $wpdb;
-		$table_name        = $this->get_table_name();
-		$sanitized_orderby = sanitize_sql_orderby( "$orderby $order" );
-		$sql               = "SELECT * FROM {$table_name} ORDER BY {$sanitized_orderby} LIMIT %d OFFSET %d";
+		$table_name      = $this->get_table_name();
+		$allowed_orderby = array( 'access_at', 'attack', 'url', 'ip', 'id' );
+		$orderby         = in_array( $orderby, $allowed_orderby, true ) ? $orderby : 'access_at';
+		$order           = ( 'asc' === $order ) ? 'ASC' : 'DESC';
+		$sql             = "SELECT * FROM {$table_name} ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d";
 
 		return array(
 			$wpdb->get_results( $wpdb->prepare( $sql, $per_page, $offset ), ARRAY_A ),

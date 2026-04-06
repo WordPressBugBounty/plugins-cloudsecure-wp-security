@@ -197,7 +197,7 @@ class CloudSecureWP_Restrict_Admin_Page extends CloudSecureWP_Common {
 		$success_rows = $this->disable_login->get_rows_status_success();
 		foreach ( $success_rows as $success_row ) {
 			$tmp_ip = trim( $success_row['ip'] );
-			if ( false === in_array( $tmp_ip, $allowed_ips ) ) {
+			if ( false !== filter_var( $tmp_ip, FILTER_VALIDATE_IP ) && false === in_array( $tmp_ip, $allowed_ips ) ) {
 				$allowed_ips[] = $tmp_ip;
 			}
 		}

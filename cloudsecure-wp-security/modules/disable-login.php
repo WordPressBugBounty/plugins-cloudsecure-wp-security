@@ -147,7 +147,7 @@ class CloudSecureWP_Disable_Login extends CloudSecureWP_Common {
 	public function create_table(): void {
 		global $wpdb;
 		$table_name = $this->get_table_name();
-		$table      = $wpdb->get_var( "SHOW TABLES LIKE '{$table_name}'" );
+		$table      = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table_name ) ) );
 
 		if ( is_null( $table ) ) {
 			$charset_collate = $wpdb->get_charset_collate();
@@ -175,7 +175,7 @@ class CloudSecureWP_Disable_Login extends CloudSecureWP_Common {
 
 		$table_name   = $this->get_table_name();
 		$expired_hour = self::LOGIN_EXPIRED_HOUR;
-		$sql          = "DELETE FROM {$table_name} WHERE login_at < SYSDATE() - INTERVAL {$expired_hour} HOUR;";
+		$sql          = $wpdb->prepare( "DELETE FROM {$table_name} WHERE login_at < SYSDATE() - INTERVAL %d HOUR", $expired_hour );
 
 		$wpdb->query( $sql );
 	}

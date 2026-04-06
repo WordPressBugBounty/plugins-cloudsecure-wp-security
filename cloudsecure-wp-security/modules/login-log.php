@@ -250,7 +250,7 @@ class CloudSecureWP_Login_Log extends CloudSecureWP_Common {
 	public function activate(): void {
 		global $wpdb;
 		$table_name = $this->get_table_name();
-		$table      = $wpdb->get_var( "SHOW TABLES LIKE '{$table_name}'" );
+		$table      = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table_name ) ) );
 
 		if ( is_null( $table ) ) {
 			$charset_collate = $wpdb->get_charset_collate();

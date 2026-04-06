@@ -310,7 +310,9 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	public function get_match_results( $rule, $request_items, $variable, $match_string ): array {
 
 		if ( isset( $_SERVER['HTTP_HOST'] ) && isset( $_SERVER['REQUEST_URI'] ) ) {
-			$complete_url = ( empty( $_SERVER['HTTPS'] ) ? 'http://' : 'https://' ) . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+			$complete_url = ( empty( $_SERVER['HTTPS'] ) ? 'http://' : 'https://' )
+				. sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) )
+				. esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) );
 		} else {
 			$complete_url = '';
 		}
@@ -635,7 +637,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 		if ( isset( $request_items['args']['rest_route'] ) && is_string( $request_items['args']['rest_route'] ) ) {
 			return $request_items['args']['rest_route'];
 		}
-		
+
 		// その他のパーマリンク設定の場合はrequest_filenameを使用
 		return $request_items['request_filename'];
 	}
@@ -704,7 +706,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 		if ( isset( $remove_rules['rest_api'] ) ) {
 			$rest_endpoint = $this->get_rest_endpoint( $request_items );
-			
+
 			// 投稿・編集（templates, blocks, template-parts, navigation, pages, posts）の場合はcontentキーを除外
 			if ( preg_match( '/templates|blocks|template-parts|navigation|pages|posts/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {

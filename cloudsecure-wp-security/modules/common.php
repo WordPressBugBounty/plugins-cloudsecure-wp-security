@@ -59,6 +59,7 @@ class CloudSecureWP_Common {
 			$tag = ' ';
 		}
 
+		$msg = str_replace( array( "\r\n", "\r", "\n" ), ' ', $msg );
 		if ( false === file_put_contents( $file_path, '[' . date_i18n( 'His' ) . ']' . $tag . $msg . "\n", FILE_APPEND | LOCK_EX ) ) {
 			return false;
 		}
@@ -170,8 +171,8 @@ class CloudSecureWP_Common {
 		?>
 		<div class="notice notice-error is-dismissible">
 			<p><strong>【CloudSecure WP Security】</strong></p>
-			<p>.htaccessファイルに変更が加えられたため、一時的に<strong><?php esc_html( print( $feature ) ); ?>機能</strong>を無効にしました。</p>
-			<p>再度有効にする場合は、<a href="<?php esc_html( print( admin_url( 'admin.php?page=cloudsecurewp_' . $key_feature ) ) ); ?>">設定画面</a>から機能を有効にしてください。</p>
+			<p>.htaccessファイルに変更が加えられたため、一時的に<strong><?php echo esc_html( $feature ); ?>機能</strong>を無効にしました。</p>
+			<p>再度有効にする場合は、<a href="<?php echo esc_url( admin_url( 'admin.php?page=cloudsecurewp_' . $key_feature ) ); ?>">設定画面</a>から機能を有効にしてください。</p>
 		</div>
 		<?php
 	}
