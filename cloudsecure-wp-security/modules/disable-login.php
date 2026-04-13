@@ -230,7 +230,6 @@ class CloudSecureWP_Disable_Login extends CloudSecureWP_Common {
 			'login_at'     => $now_datetime,
 		);
 
-		$wpdb->query( 'START TRANSACTION' );
 		$this->remove_expired_login();
 		$row = $this->get_row_by_ip( $ip );
 
@@ -245,27 +244,29 @@ class CloudSecureWP_Disable_Login extends CloudSecureWP_Common {
 				$now_failed_count = $row['failed_count'] + 1;
 				$interval_time    = strtotime( $row['login_at'] ) + (int) $this->config->get( self::KEY_INTERVAL );
 
-				if ( (int) $this->config->get( self::KEY_LIMIT ) <= $now_failed_count ) {
-					$data['status']       = self::LOGIN_STATUS_DISABLED;
-					$data['failed_count'] = $now_failed_count;
+				if ( $now_time <= $interval_time ) {
 
-				} elseif ( $now_time <= $interval_time ) {
-					$data['failed_count'] = $now_failed_count;
-					$data['login_at']     = $row['login_at'];
+					if ( (int) $this->config->get( self::KEY_LIMIT ) <= $now_failed_count ) {
+						$data['status']       = self::LOGIN_STATUS_DISABLED;
+						$data['failed_count'] = $now_failed_count;
+					} else {
+						$data['failed_count'] = $now_failed_count;
+						$data['login_at']     = $row['login_at'];
+					}
 				}
 			} elseif ( self::LOGIN_STATUS_DISABLED === $row['status'] ) {
-				$this->set_login_status( $row['status'] );
 				$duration_time = strtotime( $row['login_at'] ) + (int) $this->config->get( self::KEY_DURATION );
 
 				if ( $now_time <= $duration_time ) {
 					$data['status']   = $row['status'];
 					$data['login_at'] = $row['login_at'];
+
+					$this->set_login_status( $row['status'] );
 				}
 			}
 			$wpdb->update( $this->get_table_name(), $data, array( 'ip' => $ip ) );
 
 		}
-		$wpdb->query( 'COMMIT' );
 	}
 
 	/**
@@ -284,7 +285,7 @@ class CloudSecureWP_Disable_Login extends CloudSecureWP_Common {
 	 * @param string $password
 	 */
 	public function authenticate( $user, $user_name, $password ) {
-		if ( $this->is_disable() ) {
+		if ( isset( $_SERVER['REQUEST_METHOD'] ) && 'POST' === $_SERVER['REQUEST_METHOD'] && $this->is_disable() ) {
 			return new WP_Error( self::ERROR_CODE, 'ログイン失敗回数が上限に達したためログインが無効化されました。' );
 		}
 		return $user;

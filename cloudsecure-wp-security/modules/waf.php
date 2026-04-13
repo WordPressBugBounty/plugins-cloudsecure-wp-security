@@ -232,15 +232,27 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 			self::COLUMN_IP        => $match_results['ip'],
 		);
 
-		$wpdb->query( 'START TRANSACTION' );
-		$wpdb->insert( $table_name, $data );
-		$row = $wpdb->get_row( $wpdb->prepare( "SELECT id FROM {$wpdb->prefix}cloudsecurewp_waf_log ORDER BY id DESC LIMIT 1 OFFSET %d", $max_log ), ARRAY_A );
+		try {
+			$wpdb->query( 'START TRANSACTION' );
 
-		if ( ! empty( $row ?? array() ) ) {
-			$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->prefix}cloudsecurewp_waf_log WHERE id <= %d", $row['id'] ) );
+			$result = $wpdb->insert( $table_name, $data );
+			if ( $result === false || ! empty( $wpdb->last_error ) ) {
+				throw new Exception( 'Failed to insert WAF log.' );
+			}
+
+			$row = $wpdb->get_row( $wpdb->prepare( "SELECT id FROM {$wpdb->prefix}cloudsecurewp_waf_log ORDER BY id DESC LIMIT 1 OFFSET %d", $max_log ), ARRAY_A );
+
+			if ( ! empty( $row ?? array() ) ) {
+				$result = $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->prefix}cloudsecurewp_waf_log WHERE id <= %d", $row['id'] ) );
+				if ( $result === false || ! empty( $wpdb->last_error ) ) {
+					throw new Exception( 'Failed to delete old WAF logs.' );
+				}
+			}
+
+			$wpdb->query( 'COMMIT' );
+		} catch ( Exception $e ) {
+			$wpdb->query( 'ROLLBACK' );
 		}
-
-		$wpdb->query( 'COMMIT' );
 	}
 
 
@@ -256,7 +268,7 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 	public function get_block_history( $orderby, $order, $per_page, $offset ): array {
 		global $wpdb;
 		$table_name      = $this->get_table_name();
-		$allowed_orderby = array( 'access_at', 'attack', 'url', 'ip', 'id' );
+		$allowed_orderby = array( 'access_at', 'attack', 'url', 'matched', 'ip' );
 		$orderby         = in_array( $orderby, $allowed_orderby, true ) ? $orderby : 'access_at';
 		$order           = ( 'asc' === $order ) ? 'ASC' : 'DESC';
 		$sql             = "SELECT * FROM {$table_name} ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d";

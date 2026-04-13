@@ -31,7 +31,7 @@ class CloudSecureWP_Admin_Dashboard extends CloudSecureWP_Admin_Common {
 	protected function page(): void {
 		?>
 		<div class="box dash-box">
-			<div class="box-top">セキュリティ</div>
+			<div class="box-top-gray">ログイン保護</div>
 			<div class="box-bottom pt-0">
 				<div class="box-row">
 					<div class="flag val-<?php echo esc_attr( $this->datas['disable_login'] ); ?>"><?php echo esc_html( $this->datas['disable_login'] ); ?></div>
@@ -58,16 +58,11 @@ class CloudSecureWP_Admin_Dashboard extends CloudSecureWP_Admin_Common {
 					<div class="box-row-title"><a href="?page=cloudsecurewp_captcha">画像認証追加</a></div>
 					<div class="box-row-content">ログインフォーム、コメントフォームなどに画像認証を追加します。</div>
 				</div>
-				<div class="box-row">
-					<div class="flag val-<?php echo esc_attr( $this->datas['restrict_admin_page'] ); ?>"><?php echo esc_html( $this->datas['restrict_admin_page'] ); ?></div>
-					<div class="box-row-title"><a href="?page=cloudsecurewp_restrict_admin_page">管理画面アクセス制限</a></div>
-					<div class="box-row-content">管理画面ディレクトリ以下へのアクセスを制限します。</div>
-				</div>
-				<div class="box-row">
-					<div class="flag val-<?php echo esc_attr( $this->datas['disable_access_system_file'] ); ?>"><?php echo esc_html( $this->datas['waf'] ); ?></div>
-					<div class="box-row-title"><a href="?page=cloudsecurewp_disable_access_system_file">設定ファイルアクセス防止</a></div>
-					<div class="box-row-content">設定ファイルへのアクセスを遮断し、情報漏えいを防止します。</div>
-				</div>
+			</div>
+		</div>
+		<div class="box">
+			<div class="box-top-gray">公開情報の制限</div>
+			<div class="box-bottom pt-0">
 				<div class="box-row">
 					<div class="flag val-<?php echo esc_attr( $this->datas['disable_author_query'] ); ?>"><?php echo esc_html( $this->datas['disable_author_query'] ); ?></div>
 					<div class="box-row-title"><a href="?page=cloudsecurewp_disable_author_query">ユーザー名漏えい防止</a></div>
@@ -83,6 +78,21 @@ class CloudSecureWP_Admin_Dashboard extends CloudSecureWP_Admin_Common {
 					<div class="box-row-title"><a href="?page=cloudsecurewp_disable_restapi">REST API 無効化</a></div>
 					<div class="box-row-content">REST APIを無効化します。</div>
 				</div>
+			</div>
+		</div>
+		<div class="box">
+			<div class="box-top-gray">管理画面・システム保護</div>
+			<div class="box-bottom pt-0">
+				<div class="box-row">
+					<div class="flag val-<?php echo esc_attr( $this->datas['restrict_admin_page'] ); ?>"><?php echo esc_html( $this->datas['restrict_admin_page'] ); ?></div>
+					<div class="box-row-title"><a href="?page=cloudsecurewp_restrict_admin_page">管理画面アクセス制限</a></div>
+					<div class="box-row-content">管理画面ディレクトリ以下へのアクセスを制限します。</div>
+				</div>
+				<div class="box-row">
+					<div class="flag val-<?php echo esc_attr( $this->datas['disable_access_system_file'] ); ?>"><?php echo esc_html( $this->datas['disable_access_system_file'] ); ?></div>
+					<div class="box-row-title"><a href="?page=cloudsecurewp_disable_access_system_file">設定ファイルアクセス防止</a></div>
+					<div class="box-row-content">設定ファイルへのアクセスを遮断し、情報漏えいを防止します。</div>
+				</div>
 				<div class="box-row">
 					<div class="flag val-<?php echo esc_attr( $this->datas['waf'] ); ?>"><?php echo esc_html( $this->datas['waf'] ); ?></div>
 					<div class="box-row-title"><a href="?page=cloudsecurewp_waf">シンプルWAF</a></div>
@@ -91,7 +101,7 @@ class CloudSecureWP_Admin_Dashboard extends CloudSecureWP_Admin_Common {
 			</div>
 		</div>
 		<div class="box">
-			<div class="box-top">通知</div>
+			<div class="box-top-gray">通知</div>
 			<div class="box-bottom pt-0">
 				<div class="box-row">
 					<div class="flag val-<?php echo esc_attr( $this->datas['login_notification'] ); ?>"><?php echo esc_html( $this->datas['login_notification'] ); ?></div>
@@ -99,7 +109,7 @@ class CloudSecureWP_Admin_Dashboard extends CloudSecureWP_Admin_Common {
 					<div class="box-row-content">ログインがあったことをメールで通知します。</div>
 				</div>
 				<div class="box-row">
-					<div class="flag val-<?php echo esc_attr( $this->datas['update_notice'] ); ?>"><?php echo esc_html( $this->datas['disable_login'] ); ?></div>
+					<div class="flag val-<?php echo esc_attr( $this->datas['update_notice'] ); ?>"><?php echo esc_html( $this->datas['update_notice'] ); ?></div>
 					<div class="box-row-title"><a href="?page=cloudsecurewp_update_notification">アップデート通知</a></div>
 					<div class="box-row-content">WordPress、プラグイン、テーマのアップデートを通知します。</div>
 				</div>

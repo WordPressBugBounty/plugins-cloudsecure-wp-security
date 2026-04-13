@@ -100,15 +100,27 @@ class CloudSecureWP_Login_Log extends CloudSecureWP_Common {
 			'login_at' => current_time( 'mysql' ),
 		);
 
-		$wpdb->query( 'START TRANSACTION' );
-		$wpdb->insert( $table_name, $data );
-		$row = $wpdb->get_row( $wpdb->prepare( "SELECT id FROM {$wpdb->prefix}cloudsecurewp_login_log ORDER BY id DESC LIMIT 1 OFFSET %d", $max_log ), ARRAY_A );
+		try {
+			$wpdb->query( 'START TRANSACTION' );
 
-		if ( ! empty( $row ?? array() ) ) {
-			$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->prefix}cloudsecurewp_login_log WHERE id <= %d", $row['id'] ) );
+			$result = $wpdb->insert( $table_name, $data );
+			if ( $result === false || ! empty( $wpdb->last_error ) ) {
+				throw new Exception( 'Failed to insert login log.' );
+			}
+
+			$row = $wpdb->get_row( $wpdb->prepare( "SELECT id FROM {$wpdb->prefix}cloudsecurewp_login_log ORDER BY id DESC LIMIT 1 OFFSET %d", $max_log ), ARRAY_A );
+
+			if ( ! empty( $row ?? array() ) ) {
+				$result = $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->prefix}cloudsecurewp_login_log WHERE id <= %d", $row['id'] ) );
+				if ( $result === false || ! empty( $wpdb->last_error ) ) {
+					throw new Exception( 'Failed to delete old login logs.' );
+				}
+			}
+
+			$wpdb->query( 'COMMIT' );
+		} catch ( Exception $e ) {
+			$wpdb->query( 'ROLLBACK' );
 		}
-
-		$wpdb->query( 'COMMIT' );
 	}
 
 	/**
@@ -117,11 +129,10 @@ class CloudSecureWP_Login_Log extends CloudSecureWP_Common {
 	public function wp_login( $user_login ) {
 
 		global $wpdb;
+		$ip = $this->get_client_ip();
 
-		$wpdb->query( 'START TRANSACTION' );
 		$this->disable_login->remove_expired_login();
 
-		$ip   = $this->get_client_ip();
 		$data = array(
 			'ip'           => $ip,
 			'status'       => $this->disable_login->get_status_success(),
@@ -135,9 +146,7 @@ class CloudSecureWP_Login_Log extends CloudSecureWP_Common {
 		} else {
 			$wpdb->update( $this->disable_login->get_table_name(), $data, array( 'ip' => $ip ) );
 		}
-		$wpdb->query( 'COMMIT' );
 
-		$ip = $this->get_client_ip();
 		$this->write_log( $user_login, $ip, self::LOGIN_STATUS_SUCCESS, self::METHOD_PAGE );
 	}
 

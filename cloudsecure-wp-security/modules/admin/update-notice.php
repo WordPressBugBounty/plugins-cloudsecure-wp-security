@@ -114,7 +114,7 @@ class CloudSecureWP_Admin_Update_Notice extends CloudSecureWP_Admin_Common {
 			<h1 class="title-block-title">アップデート通知</h1>
 		</div>
 		<div class="title-bottom-text">
-			WordPress、プラグイン、テーマの更新が必要になったとき、管理者にメールで通知します。<br />
+			WordPress、プラグイン、テーマの更新が必要になったとき、WordPressの管理者ユーザーにメールで通知します。<br />
 			更新の確認は24時間ごとに行われます。<br />
 			<strong>※「/cron.php」へのhttpアクセスが発生するため、アクセスできない環境では機能を有効化できません。<br />
 			　Basic認証（ベーシック認証 / 基本認証）を設定している場合など、ご注意ください。</strong>

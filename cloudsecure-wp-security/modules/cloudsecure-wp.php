@@ -268,7 +268,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			}
 
 			if ( $this->two_factor_authentication->is_enabled() && 'xmlrpc.php' !== basename( $_SERVER['SCRIPT_NAME'] ) && ! is_admin() ) {
-				add_filter( 'sanitize_user', array( $this->two_factor_authentication, 'restore_login_name' ), 0, 1 );
+				add_action( 'login_init', array( $this->two_factor_authentication, 'restore_rememberme' ), 0, 1 );
 				add_filter( 'authenticate', array( $this->two_factor_authentication, 'restore_login_session' ), 0, 3 );
 				add_filter( 'authenticate', array( $this->two_factor_authentication, 'two_factor_disable_login_check' ), 100, 3 );
 				add_filter( 'authenticate', array( $this->two_factor_authentication, 'authenticate_with_two_factor' ), 101, 3 );
@@ -354,11 +354,11 @@ class CloudSecureWP extends CloudSecureWP_Common {
 		add_submenu_page( $slug, 'ログインエラーメッセージ統一', 'ログインエラーメッセージ統一', 'manage_options', $slug . '_unify_messages', array( $this, 'm_unify_messages' ) );
 		add_submenu_page( $slug, '2段階認証', '2段階認証', 'manage_options', $slug . '_two_factor_authentication', array( $this, 'm_two_factor_authentication' ) );
 		add_submenu_page( $slug, '画像認証追加', '画像認証追加', 'manage_options', $slug . '_captcha', array( $this, 'm_captcha' ) );
-		add_submenu_page( $slug, '管理画面アクセス制限', '管理画面アクセス制限', 'manage_options', $slug . '_restrict_admin_page', array( $this, 'm_restrict_admin_page' ) );
-		add_submenu_page( $slug, '設定ファイルアクセス防止', '設定ファイルアクセス防止', 'manage_options', $slug . '_disable_access_system_file', array( $this, 'm_disable_access_system_file' ) );
 		add_submenu_page( $slug, 'ユーザー名漏えい防止', 'ユーザー名漏えい防止', 'manage_options', $slug . '_disable_author_query', array( $this, 'm_disable_author_query' ) );
 		add_submenu_page( $slug, 'XML-RPC無効化', 'XML-RPC無効化', 'manage_options', $slug . '_disable_xmlrpc', array( $this, 'm_disable_xmlrpc' ) );
 		add_submenu_page( $slug, 'REST API無効化', 'REST API無効化', 'manage_options', $slug . '_disable_restapi', array( $this, 'm_disable_restapi' ) );
+		add_submenu_page( $slug, '管理画面アクセス制限', '管理画面アクセス制限', 'manage_options', $slug . '_restrict_admin_page', array( $this, 'm_restrict_admin_page' ) );
+		add_submenu_page( $slug, '設定ファイルアクセス防止', '設定ファイルアクセス防止', 'manage_options', $slug . '_disable_access_system_file', array( $this, 'm_disable_access_system_file' ) );
 		add_submenu_page( $slug, 'シンプルWAF', 'シンプルWAF', 'manage_options', $slug . '_waf', array( $this, 'm_waf' ) );
 		add_submenu_page( $slug, 'ログイン通知', 'ログイン通知', 'manage_options', $slug . '_login_notification', array( $this, 'm_login_notification' ) );
 		add_submenu_page( $slug, 'アップデート通知', 'アップデート通知', 'manage_options', $slug . '_update_notification', array( $this, 'm_update_notice' ) );

@@ -235,9 +235,6 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 				action="<?php echo esc_url( site_url( 'wp-login.php', 'login_post' ) ); ?>" method="post">
 				<?php wp_nonce_field( $this->get_feature_key() . '_csrf' ); ?>
 			<div class="two-fa-form">
-				<?php if ( array_key_exists( 'rememberme', $_REQUEST ) && 'forever' === sanitize_text_field( $_REQUEST['rememberme'] ) ) : ?>
-					<input name="rememberme" type="hidden" id="rememberme" value="forever"/>
-				<?php endif; ?>
 				<input type="hidden" name="login_token" value="<?php echo esc_attr( $login_token ); ?>">
 				<input type="hidden" name="redirect_to"
 						value="<?php echo esc_attr( wp_validate_redirect( wp_unslash( $_REQUEST['redirect_to'] ?? '' ), admin_url() ) ); ?>"/>
@@ -460,7 +457,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 				$auth_info = $this->repair_migration_gaps( $user_id );
 			}
 			$value = '未設定';
-			if ( count ( $auth_info ) > 0 ) {
+			if ( count( $auth_info ) > 0 ) {
 				$value = '設定済';
 			}
 			return $value;
@@ -604,7 +601,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 * @param int    $user_id
 	 * @param string $secret
 	 *
-	 * @return bool true: 送信成功、false: 送信制限中
+	 * @return bool true: 送信成功、false: 送信失敗
 	 */
 	private function send_2fa_email( int $user_id, string $secret = '' ): bool {
 		// 送信制限チェック（30秒間）
@@ -622,8 +619,11 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			$secret    = $auth_info['secret'];
 		}
 		// 新しいコードを生成して送信
-		$code = CloudSecureWP_Time_Based_One_Time_Password::create_code_for_email( $secret, self::AUTH_EMAIL_INTERVAL );
-		$this->send_code( $user_id, $code, self::AUTH_EMAIL_INTERVAL, 'login' );
+		$code   = CloudSecureWP_Time_Based_One_Time_Password::create_code_for_email( $secret, self::AUTH_EMAIL_INTERVAL );
+		$result = $this->send_code( $user_id, $code, self::AUTH_EMAIL_INTERVAL, 'login' );
+		if ( ! $result ) {
+			return false;
+		}
 
 		// 最終送信時刻を更新
 		$this->update_email_able_send_time( $user_id );
@@ -663,34 +663,29 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	}
 
 	/**
-	 * 認証フック: ユーザ名復元処理
+	 * login_init フック: rememberme 復元処理
 	 *
-	 * @param string $username
-	 * @param bool   $strict
-	 *
-	 * @return string
+	 * @return void
 	 */
-	public function restore_login_name( string $username, $strict = false ): string {
-
-		// 初回アクセス・または初回認証の場合、何もしない
-		if ( ! isset( $_POST['authenticator_code'] ) ) {
-			return $username;
+	public function restore_rememberme(): void {
+		// 2FAコード送信POST以外は何もしない
+		if ( ! isset( $_POST['authenticator_code'], $_POST['login_token'] ) ) {
+			return;
 		}
 
-		// ログイントークンを取得
-		$login_token = sanitize_text_field( $_POST['login_token'] ?? '' );
-
-		// ログイン情報を取得
+		$login_token = sanitize_text_field( $_POST['login_token'] );
 		$option_key  = $this->create_option_key( $login_token );
 		$option_data = $this->get_option_data( $option_key );
 
-		// ログイン情報が存在しない場合、何もしない
+		// 期限切れ・取得失敗時は何もしない
 		if ( $option_data === false ) {
-			return $username;
+			return;
 		}
 
-		// ユーザ名を返却
-		return $option_data['user_login'];
+		// 保存された rememberme が forever の場合のみ $_POST を上書き
+		if ( isset( $option_data['rememberme'] ) && 'forever' === $option_data['rememberme'] ) {
+			$_POST['rememberme'] = 'forever';
+		}
 	}
 
 	/**
@@ -836,7 +831,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			if ( count( $auth_info ) === 0 ) {
 				// データ移行漏れ対応
 				$auth_info = $this->repair_migration_gaps( $user->ID );
-				if ( count ( $auth_info ) === 0 ) {
+				if ( count( $auth_info ) === 0 ) {
 					return $user;
 				}
 			}
@@ -861,6 +856,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 				'created'         => time(),
 				'has_recovery'    => $has_recovery,
 				'email_address'   => $this->mask_email( $user->ID ),
+				'rememberme'      => sanitize_text_field( $_POST['rememberme'] ?? '' ),
 			);
 
 			// データを保存
@@ -868,7 +864,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 
 			// メール認証の場合、コードを生成して送信
 			if ( intVal( $auth_info['method'] ) === self::USER_AUTH_METHOD_EMAIL ) {
-				$this->send_2fa_email( $user->ID, $auth_info['secret'] );
+				$result = $this->send_2fa_email( $user->ID, $auth_info['secret'] );
 			}
 
 			// 2FA画面を表示して、処理終了
@@ -1061,7 +1057,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 
 		// SQLエラーチェック
 		if ( $result === false || ! empty( $wpdb->last_error ) ) {
-			throw new Exception( 'Failed to insert login logs: ' . $wpdb->last_error );
+			throw new Exception( 'Failed to insert login logs.' );
 		}
 	}
 
@@ -1098,7 +1094,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 
 		// SQLエラーチェック
 		if ( $result === false || ! empty( $wpdb->last_error ) ) {
-			throw new Exception( 'Failed to delete options: ' . $wpdb->last_error );
+			throw new Exception( 'Failed to delete options.' );
 		}
 	}
 
@@ -1309,14 +1305,16 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 * @param int    $user_id
 	 * @param int    $method
 	 * @param string $secret
+	 *
 	 * @return void
+	 * @throws Exception SQLエラー発生時.
 	 */
 	private function update_2fa_auth_method( int $user_id, int $method, string $secret ): void {
 		global $wpdb;
 
 		// 認証情報を更新
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-		$wpdb->update(
+		$result = $wpdb->update(
 			$wpdb->prefix . 'cloudsecurewp_2fa_auth',
 			array(
 				'method' => $method,
@@ -1324,6 +1322,11 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			),
 			array( 'user_id' => $user_id )
 		);
+
+		// SQLエラーチェック
+		if ( $result === false || ! empty( $wpdb->last_error ) ) {
+			throw new Exception( 'Failed to update 2fa auth method.' );
+		}
 	}
 
 	/**
@@ -1334,13 +1337,14 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 * @param string $secret
 	 *
 	 * @return void
+	 * @throws Exception SQLエラー発生時.
 	 */
 	private function insert_2fa_auth_method( int $user_id, int $method, string $secret ): void {
 		global $wpdb;
 
 		// 認証情報を新規登録
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-		$wpdb->insert(
+		$result = $wpdb->insert(
 			$wpdb->prefix . 'cloudsecurewp_2fa_auth',
 			array(
 				'user_id'  => $user_id,
@@ -1349,6 +1353,10 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 				'method'   => $method,
 			)
 		);
+
+		if ( $result === false || ! empty( $wpdb->last_error ) ) {
+			throw new Exception( 'Failed to insert 2fa auth method.' );
+		}
 	}
 
 	/**
@@ -1633,7 +1641,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 
 		// SQLエラーチェック（INSERT IGNOREは重複エラーを返さないが、その他のエラーはチェック）
 		if ( $result === false || ! empty( $wpdb->last_error ) ) {
-			throw new Exception( 'Failed to bulk insert 2fa auth data: ' . $wpdb->last_error );
+			throw new Exception( 'Failed to bulk insert 2fa auth data.' );
 		}
 
 		// 失敗したuser_id（挿入されなかったID）を特定
@@ -1688,7 +1696,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 
 		// 削除エラーチェック
 		if ( $result === false || ! empty( $wpdb->last_error ) ) {
-			throw new Exception( 'Failed to delete usermeta: ' . $wpdb->last_error );
+			throw new Exception( 'Failed to delete usermeta.' );
 		}
 	}
 
@@ -1959,6 +1967,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 * @param int $user_id
 	 *
 	 * @return array
+	 * @throws Exception SQLエラー発生時.
 	 */
 	public function repair_migration_gaps( int $user_id ): array {
 		global $wpdb;
@@ -1997,11 +2006,15 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			$this->insert_2fa_auth_method( $user_id, self::USER_AUTH_METHOD_APP, $hex_secret );
 
 			// シークレットキーをwp_usermetaから削除
-			delete_user_meta( $user_id, self::TWO_FACTOR_SECRET_KEY );
+			$result = delete_user_meta( $user_id, self::TWO_FACTOR_SECRET_KEY );
+			if ( ! $result || ! empty( $wpdb->last_error ) ) {
+				throw new Exception( 'Failed to delete secret key from user meta.' );
+			}
 
 			// トランザクションコミット
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 			$wpdb->query( 'COMMIT' );
+
 			$auth_info = $this->get_2fa_auth_info( $user_id );
 			return $auth_info;
 		} catch ( Exception $e ) {
@@ -2025,10 +2038,18 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			wp_send_json_error();
 		}
 
-		// 秘密鍵を生成
-		$secret_key_data = CloudSecureWP_Time_Based_One_Time_Password::generate_secret_key();
+		try {
+			// 秘密鍵を生成
+			$secret_key_data = CloudSecureWP_Time_Based_One_Time_Password::generate_secret_key();
 
-		wp_send_json_success( $secret_key_data );
+			wp_send_json_success( $secret_key_data );
+			return;
+
+		} catch ( Exception $e ) {
+			$secret_key_data = [];
+			wp_send_json_error( $secret_key_data );
+			return;
+		}
 	}
 
 	/**
@@ -2059,6 +2080,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		if ( $remaining_seconds > 0 ) {
 			$json_response['remaining_seconds'] = $remaining_seconds;
 			wp_send_json_success( $json_response );
+			return;
 		}
 
 		try {
@@ -2067,7 +2089,11 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			// 認証コードを生成
 			$code = CloudSecureWP_Time_Based_One_Time_Password::create_code_for_email( $secret_key_data['hex'], self::AUTH_EMAIL_INTERVAL );
 			// メール送信
-			$this->send_code( $user_id, $code, self::AUTH_EMAIL_INTERVAL, 'setting' );
+			$result = $this->send_code( $user_id, $code, self::AUTH_EMAIL_INTERVAL, 'setting' );
+			if ( ! $result ) {
+				wp_send_json_error( $json_response );
+				return;
+			}
 			// 最終送信時刻を更新
 			$this->update_email_able_send_time( $user_id );
 
@@ -2078,9 +2104,11 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			$json_response['is_send_email']     = true;
 			$json_response['remaining_seconds'] = self::EMAIL_SEND_LIMIT_TIME;
 			wp_send_json_success( $json_response );
+			return;
 
 		} catch ( Exception $e ) {
 			wp_send_json_error( $json_response );
+			return;
 		}
 	}
 
@@ -2116,20 +2144,17 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			$secret_key    = get_transient( $transient_key );
 			if ( ! $secret_key ) {
 				wp_send_json_error( $json_response );
+				return;
 			}
 		}
 
 		if ( ! CloudSecureWP_Time_Based_One_Time_Password::verify_code( $secret_key, $code, $interval ) ) {
 			wp_send_json_error( $json_response );
+			return;
 		}
 
 		// 認証成功 - データベースに保存
 		try {
-			global $wpdb;
-
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-			$wpdb->query( 'START TRANSACTION' );
-
 			// 2fa認証情報を設定
 			$this->setting_2fa_auth_info( $user_id, $auth_method, $secret_key );
 
@@ -2141,18 +2166,14 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 				$this->delete_email_able_send_time( $user_id );
 			}
 
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-			$wpdb->query( 'COMMIT' );
-
 			// リカバリーコードの設定状況を取得
 			$has_recovery                  = $this->has_recovery_codes( $user_id );
 			$json_response['has_recovery'] = $has_recovery;
 			wp_send_json_success( $json_response );
+			return;
 		} catch ( Exception $e ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-			$wpdb->query( 'ROLLBACK' );
-
 			wp_send_json_error( $json_response );
+			return;
 		}
 	}
 
@@ -2180,20 +2201,24 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			$auth_info = $this->get_2fa_auth_info( $user_id );
 			if ( count( $auth_info ) === 0 ) {
 				wp_send_json_error( $json_response );
+				return;
 			}
 
 			// リカバリーコードを生成
 			$codes = CloudSecureWP_Recovery_Codes::initialize_codes( $user_id );
 			if ( count( $codes ) === 0 ) {
 				wp_send_json_error( $json_response );
+				return;
 			}
 
 			// 平文コードを返却（これは1度だけ表示される）
 			$json_response['codes'] = $codes;
 			wp_send_json_success( $json_response );
+			return;
 
 		} catch ( Exception $e ) {
 			wp_send_json_error( $json_response );
+			return;
 		}
 	}
 
@@ -2205,12 +2230,12 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 * @param int    $time_step 時間間隔（秒）
 	 * @param string $status 'login' または 'setting'
 	 *
-	 * @return void
+	 * @return bool true: メール送信成功、false: メール送信失敗
 	 */
-	private function send_code( int $user_id, string $code, int $time_step, string $status ): void {
+	private function send_code( int $user_id, string $code, int $time_step, string $status ): bool {
 		$user = get_userdata( $user_id );
 		if ( ! $user ) {
-			return;
+			return false;
 		}
 		$expire  = $time_step / 60;
 		$to      = $user->user_email;
@@ -2231,6 +2256,6 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		$body .= "--\n";
 		$body .= "CloudSecure WP Security\n";
 
-		$this->wp_send_mail( $to, esc_html( $subject ), esc_html( $body ) );
+		return $this->wp_send_mail( $to, esc_html( $subject ), esc_html( $body ) );
 	}
 }

@@ -65,10 +65,23 @@ class CloudSecureWP_Server_Error_Notification extends CloudSecureWP_Common {
 			$error['file'] = mb_substr( $error['file'], 0, 65535, 'UTF-8' );
 		}
 
-		$wpdb->query( 'START TRANSACTION' );
-		$wpdb->insert( $table_name, $error );
-		$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->prefix}cloudsecurewp_server_error WHERE id <= (SELECT id FROM (SELECT id FROM {$wpdb->prefix}cloudsecurewp_server_error ORDER BY id DESC LIMIT 1 OFFSET %d) tmp)", $max_items ) );
-		$wpdb->query( 'COMMIT' );
+		try {
+			$wpdb->query( 'START TRANSACTION' );
+
+			$result = $wpdb->insert( $table_name, $error );
+			if ( $result === false || ! empty( $wpdb->last_error ) ) {
+				throw new Exception( 'Failed to insert server error.' );
+			}
+
+			$result = $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->prefix}cloudsecurewp_server_error WHERE id <= (SELECT id FROM (SELECT id FROM {$wpdb->prefix}cloudsecurewp_server_error ORDER BY id DESC LIMIT 1 OFFSET %d) tmp)", $max_items ) );
+			if ( $result === false || ! empty( $wpdb->last_error ) ) {
+				throw new Exception( 'Failed to delete old server errors.' );
+			}
+
+			$wpdb->query( 'COMMIT' );
+		} catch ( Exception $e ) {
+			$wpdb->query( 'ROLLBACK' );
+		}
 	}
 
 	/**
@@ -208,8 +221,11 @@ class CloudSecureWP_Server_Error_Notification extends CloudSecureWP_Common {
 			$last_sent   = get_option( $option_name );
 			if ( ! $last_sent || time() > $last_sent + HOUR_IN_SECONDS ) {
 				update_option( $option_name, time() );
-				$to = get_option( 'admin_email' );
-				$this->wp_send_mail( $to, esc_html( 'サーバーエラー通知' ), $this->get_body( $error ) );
+
+				$admins = $this->get_admin_users();
+				foreach ( $admins as $admin ) {
+					$this->wp_send_mail( $admin->user_email, esc_html( 'サーバーエラー通知' ), $this->get_body( $error ) );
+				}
 			}
 		}
 

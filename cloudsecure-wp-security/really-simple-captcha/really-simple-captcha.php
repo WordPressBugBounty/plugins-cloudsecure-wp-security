@@ -59,7 +59,7 @@ class CloudSecureWP_ReallySimpleCaptcha {
 		$this->tmp_dir = path_join( __DIR__, 'tmp' );
 
 		/* Array of CAPTCHA image size. Width and height */
-		$this->img_size = array( 100, 24 );
+		$this->img_size = array( 145, 36 );
 
 		/* Background color of CAPTCHA image. RGB color 0-255 */
 		$this->bg = array( 255, 255, 255 );
@@ -68,13 +68,13 @@ class CloudSecureWP_ReallySimpleCaptcha {
 		$this->fg = array( 0, 0, 0 );
 
 		/* Coordinates for a text in an image. I don't know the meaning. Just adjust. */
-		$this->base = array( 6, 18 );
+		$this->base = array( 6, 28 );
 
 		/* Font size */
-		$this->font_size = 14;
+		$this->font_size = 20;
 
 		/* Width of a character */
-		$this->font_char_width = 15;
+		$this->font_char_width = 22;
 
 		/* Image type. 'png', 'gif' or 'jpeg' */
 		$this->img_type = 'png';

@@ -71,7 +71,7 @@ class CloudSecureWP_Admin_Server_Error_Notification extends CloudSecureWP_Admin_
 			<h1 class="title-block-title">サーバーエラー通知</h1>
 		</div>
 		<div class="title-bottom-text">
-			サーバーエラー「HTTPステータスコード500（Internal Server Error）」が発生したとき、エラーの履歴を記録し、管理者にメールで通知します。<br />
+			サーバーエラー「HTTPステータスコード500（Internal Server Error）」が発生したとき、エラーの履歴を記録し、WordPressの管理者ユーザーにメールで通知します。<br />
 			<strong>※機能を有効にした場合のみ、エラーの履歴を記録します。</strong><br />
 			1時間以内に同じタイプのエラーが発生した場合、エラーの履歴は記録しますが、メールでの通知は行いません。
 		</div>

@@ -233,6 +233,16 @@
 	font-weight: 700;
 }
 
+/* boxの上部(グレー) */
+#cloudsecure-wp-security .box-top-gray {
+	border-bottom: 1px solid #dbdcdd;
+	padding: 12px;
+	font-size: 14px;
+	font-weight: 700;
+	background-color: #E4E5E5;
+	color: #4F565B;
+}
+
 /* boxの下部 */
 #cloudsecure-wp-security .box-bottom {
 	padding: 12px 24px 0px 24px;

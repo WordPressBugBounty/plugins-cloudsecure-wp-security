@@ -9,7 +9,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 	/**
 	 * 認証方法
 	 *
-	 * @var bool
+	 * @var int
 	 */
 	private $auth_method;
 	/**
@@ -21,7 +21,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 	/**
 	 * 使用可能なリカバリーコードの数
 	 *
-	 * @var bool
+	 * @var int
 	 */
 	private $recovery_cnt;
 	/**
@@ -53,7 +53,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 		if ( count( $auth_info ) === 0 ) {
 			$auth_info = $this->two_factor_authentication->repair_migration_gaps( $user_id );
 		}
-		
+
 		if ( count( $auth_info ) > 0 ) {
 			$this->auth_method = intVal( $auth_info['method'] );
 
@@ -294,7 +294,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 				<button type="button" id="setting-modal-next" class="button button-blue modal-next">リカバリーコードを生成</button>
 			</div>
 		</template>
-		
+
 		<!-- リカバリーコードテンプレート（成功） -->
 		<template id="recovery-code-modal-success">
 			<div class="recovery-modal-body-top">
@@ -362,7 +362,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 			function disableModalButtons() {
 				const settingModal = document.getElementById('setting-modal');
 				const confirmModal = document.getElementById('confirm-modal');
-				
+
 				if (settingModal && settingModal.style.display === 'block') {
 					const buttons = settingModal.querySelectorAll('button');
 					buttons.forEach(btn => {
@@ -375,7 +375,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 						closeIcon.style.opacity = '0.5';
 					}
 				}
-				
+
 				if (confirmModal && confirmModal.style.display === 'block') {
 					const buttons = confirmModal.querySelectorAll('button');
 					buttons.forEach(btn => {
@@ -393,7 +393,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 			function enableModalButtons() {
 				const settingModal = document.getElementById('setting-modal');
 				const confirmModal = document.getElementById('confirm-modal');
-				
+
 				if (settingModal && settingModal.style.display === 'block') {
 					const buttons = settingModal.querySelectorAll('button');
 					buttons.forEach(btn => {
@@ -406,7 +406,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 						closeIcon.style.opacity = '1';
 					}
 				}
-				
+
 				if (confirmModal && confirmModal.style.display === 'block') {
 					const buttons = confirmModal.querySelectorAll('button');
 					buttons.forEach(btn => {
@@ -425,7 +425,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 				const form = document.createElement('form');
 				form.method = 'POST';
 				form.action = window.location.href;
-				
+
 				const inputMessage = document.createElement('input');
 				inputMessage.type = 'hidden';
 				inputMessage.name = 'message';
@@ -435,7 +435,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 				inputError.type = 'hidden';
 				inputError.name = 'error';
 				inputError.value = error;
-				
+
 				form.appendChild(inputMessage);
 				form.appendChild(inputError);
 				document.body.appendChild(form);
@@ -479,7 +479,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 			function updateResendLinkState() {
 				const resendLink = document.getElementById('resend-email-code');
 				const countdownSpan = document.querySelector('.countdown-message');
-				
+
 				if (!resendLink || !emailSentTime || !countdownSpan) {
 					return;
 				}
@@ -492,7 +492,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 					// リンクを非活性化してカウントダウン表示
 					resendLink.className = 'resend-email-code-inactive';
 					countdownSpan.textContent = ` (${remaining}秒後)`;
-					
+
 					// 1秒後に再度更新
 					countdownTimeout = setTimeout(updateResendLinkState, 1000);
 				} else {
@@ -511,7 +511,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 					clearTimeout(countdownTimeout);
 					countdownTimeout = null;
 				}
-				
+
 				// 即座に状態を更新
 				updateResendLinkState();
 			}
@@ -519,10 +519,10 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 			function displayQRCode(key) {
 				const qrcodeElement = document.getElementById('qrcode');
 				const setupKeyDisplay = document.getElementById('setup_key_display');
-				
+
 				if (!qrcodeElement) {
 					console.error('QRコード要素が見つかりません');
-					return
+					return;
 				}
 
 				// 既存のQRコードを完全にクリア
@@ -565,11 +565,11 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 			// メール認証コードを送信処理
 			function generateSecretKeyAndsendEmail(resendFlg) {
 				const nonce = document.getElementById('_wpnonce').value;
-				
+
 				if (!resendFlg) {
 					disableModalButtons();
 				}
-				
+
 				// AJAXでサーバーに送信
 				jQuery.ajax({
 					url: ajaxUrl,
@@ -635,7 +635,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 						if (reGenerateFlg === false) {
 							openAuthModal('app');
 						}
-						
+
 						// DOMが構築されるのを待ってから処理を実行
 						setTimeout(function() {
 							const secretKeyEle = document.getElementById('secret-key');
@@ -724,7 +724,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 			}
 			// リカバリーコード生成処理
 			function generateRecoveryCode(openModalFlg) {
-				const nonce      = document.getElementById('_wpnonce').value;
+				const nonce = document.getElementById('_wpnonce').value;
 
 				if (openModalFlg) {
 					disableModalButtons();
@@ -743,13 +743,13 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 					if (response.success && Array.isArray(response.data.codes) && response.data.codes.length > 0) {
 						// 成功時のリカバリーコードモーダルを表示
 						closeConfirmModal();
-						openRecoveryCodesSuccessModal(response.data.codes)
+						openRecoveryCodesSuccessModal(response.data.codes);
 						enableModalButtons();
 						return;
 					} else {
 						// 失敗時のリカバリーコードモーダルを表示
 						closeConfirmModal();
-						openRecoveryCodesFailureModal()
+						openRecoveryCodesFailureModal();
 						enableModalButtons();
 						return;
 					}
@@ -757,7 +757,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 				.fail(function(xhr) {
 					// 失敗時のリカバリーコードモーダルを表示
 					closeConfirmModal();
-					openRecoveryCodesFailureModal()
+					openRecoveryCodesFailureModal();
 					enableModalButtons();
 					return;
 				})
@@ -767,7 +767,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 				const codeItems = document.querySelectorAll('.recovery-code-item');
 				const codes = Array.from(codeItems).map(item => item.textContent);
 				const codesText = codes.join('\n');
-				
+
 				// HTTPS環境またはlocalhost: Clipboard APIを使用
 				if (navigator.clipboard && navigator.clipboard.writeText) {
 					navigator.clipboard.writeText(codesText).then(function() {
@@ -791,7 +791,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 				document.body.appendChild(textarea);
 				textarea.focus();
 				textarea.select();
-				
+
 				try {
 					const successful = document.execCommand('copy');
 					if (successful) {
@@ -818,7 +818,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 				a.style.display = 'none';
 				document.body.appendChild(a);
 				a.click();
-				
+
 				setTimeout(function() {
 					document.body.removeChild(a);
 					URL.revokeObjectURL(url);
@@ -860,7 +860,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 				}
 
 				settingBody.innerHTML = '';
-				
+
 				const clone = document.importNode(template.content, true);
 				settingBody.appendChild(clone);
 			}
@@ -896,7 +896,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 					codeItem.className = 'recovery-code-item';
 					codeItem.textContent = code;
 					container.appendChild(codeItem);
-				})
+				});
 
 				settingBody.className = 'recovery-modal-body';
 				settingModal.style.display = 'block';

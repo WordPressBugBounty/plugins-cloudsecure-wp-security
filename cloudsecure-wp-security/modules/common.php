@@ -87,7 +87,7 @@ class CloudSecureWP_Common {
 	 * @return bool
 	 */
 	public function wp_send_mail( string $to, string $subject, string $body ): bool {
-		$subject = '【' . get_option( 'blogname' ) . '】 ' . $subject;
+		$subject = '【' . get_option( 'blogname' ) . '】 ' . $subject . '｜CloudSecure WP Security';
 
 		if ( @wp_mail( $to, $subject, $body ) ) {
 			return true;
