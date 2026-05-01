@@ -63,7 +63,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 		$this->update_notice              = new CloudSecureWP_Update_Notice( $info, $this->config );
 		$this->captcha                    = new CloudSecureWP_CAPTCHA( $info, $this->config );
 		$this->login_log                  = new CloudSecureWP_Login_Log( $info, $this->config, $this->disable_login );
-		$this->two_factor_authentication  = new CloudSecureWP_Two_Factor_Authentication( $info, $this->config, $this->disable_login, $this->login_log );
+		$this->two_factor_authentication  = new CloudSecureWP_Two_Factor_Authentication( $info, $this->config, $this->disable_login, $this->login_log, $this->disable_xmlrpc );
 		$this->server_error_notification  = new CloudSecureWP_Server_Error_Notification( $info, $this->config );
 		$this->waf                        = new CloudSecureWP_Waf( $info, $this->config );
 		$this->disable_access_system_file = new CloudSecureWP_Disable_Access_System_File( $info, $this->config );
@@ -147,7 +147,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			add_action( 'wp_login', array( $this->login_log, 'wp_login' ), 1, 1 );
 			add_action( 'wp_login', array( $this->two_factor_authentication, 'cleanup_expired_sessions' ), 2, 0 );
 			add_action( 'xmlrpc_call', array( $this->login_log, 'xmlrpc_call' ), 10 );
-			add_action( 'wp_login_failed', array( $this->login_log, 'wp_login_failed' ), 20, 1 );
+			add_action( 'wp_login_failed', array( $this->login_log, 'wp_login_failed' ), 20, 2 );
 
 			if ( $this->login_notification->is_enabled() ) {
 				add_action( 'wp_login', array( $this->login_notification, 'notification' ), 10, 2 );
@@ -156,7 +156,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			if ( $this->disable_login->is_enabled() ) {
 				add_filter( 'shake_error_codes', array( $this->disable_login, 'shake_error_codes' ) );
 				add_filter( 'authenticate', array( $this->disable_login, 'authenticate' ), 99, 3 );
-				add_action( 'wp_login_failed', array( $this->disable_login, 'wp_login_failed' ), 10, 1 );
+				add_action( 'wp_login_failed', array( $this->disable_login, 'wp_login_failed' ), 10, 2 );
 			}
 
 			if ( $this->rename_login_page->is_enabled() ) {
@@ -267,12 +267,16 @@ class CloudSecureWP extends CloudSecureWP_Common {
 				add_action( 'wp_ajax_cloudsecurewp_generate_recovery_codes', array( $this->two_factor_authentication, 'ajax_generate_recovery_codes' ) );
 			}
 
-			if ( $this->two_factor_authentication->is_enabled() && 'xmlrpc.php' !== basename( $_SERVER['SCRIPT_NAME'] ) && ! is_admin() ) {
-				add_action( 'login_init', array( $this->two_factor_authentication, 'restore_rememberme' ), 0, 1 );
+			if ( $this->two_factor_authentication->is_enabled() && 'xmlrpc.php' !== basename( sanitize_text_field( $_SERVER['SCRIPT_NAME'] ) ) && ! is_admin() ) {
+				add_action( 'login_init', array( $this->two_factor_authentication, 'restore_rememberme' ), 0, 0 );
 				add_filter( 'authenticate', array( $this->two_factor_authentication, 'restore_login_session' ), 0, 3 );
 				add_filter( 'authenticate', array( $this->two_factor_authentication, 'two_factor_disable_login_check' ), 100, 3 );
 				add_filter( 'authenticate', array( $this->two_factor_authentication, 'authenticate_with_two_factor' ), 101, 3 );
 				add_action( 'wp_login', array( $this->two_factor_authentication, 'redirect_if_not_two_factor_authentication_registered' ), 10, 2 );
+			}
+
+			if ( $this->two_factor_authentication->is_enabled() && $this->two_factor_authentication->is_xmlrpc_login_denied() && 'xmlrpc.php' === basename( sanitize_text_field( $_SERVER['SCRIPT_NAME'] ) ) ) {
+				add_filter( 'authenticate', array( $this->two_factor_authentication, 'deny_xmlrpc_authentication' ), 50, 3 );
 			}
 
 			if ( $this->two_factor_authentication->is_enabled() && is_admin() && current_user_can( 'administrator' ) ) {
@@ -287,6 +291,9 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			}
 
 			$this->update();
+
+			add_action( 'admin_notices', array( $this->two_factor_authentication, 'admin_notice_148_xmlrpc' ), 1, 0 );
+			add_action( 'wp_ajax_cloudsecurewp_dismiss_notice_148', array( $this->two_factor_authentication, 'ajax_dismiss_notice_148' ) );
 
 			add_action( 'admin_menu', array( $this, 'admin_menu' ) );
 		}
@@ -697,6 +704,11 @@ class CloudSecureWP extends CloudSecureWP_Common {
 
 		if ( version_compare( $old_version, '1.4.6' ) < 0 ) {
 			$this->two_factor_authentication->migrate_recovery_codes_to_json();
+		}
+
+		if ( version_compare( $old_version, '1.4.8' ) < 0 ) {
+			$this->two_factor_authentication->migrate_xmlrpc_login_default();
+			$this->two_factor_authentication->send_update_notice();
 		}
 
 		$this->config->set( 'version', $now_version );

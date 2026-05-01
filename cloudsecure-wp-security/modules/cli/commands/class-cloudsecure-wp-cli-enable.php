@@ -722,6 +722,11 @@ class CloudSecureWP_CLI_Enable extends CloudSecureWP_CLI_Base {
 					'validator'     => 'validate_wordpress_roles',
 					'error_message' => '2段階認証が有効な権限グループには有効なWordPressユーザー権限を指定してください。',
 				),
+				'xmlrpc_login' => array(
+					'type'           => 'select',
+					'allowed_values' => array( '0', '1' ),
+					'error_message'  => 'XML-RPCログイン制限には 0 または 1 のいずれかの値を指定してください。',
+				),
 			),
 			'waf' => array(
 				'available_rules' => array(

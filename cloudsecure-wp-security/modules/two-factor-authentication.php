@@ -6,6 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	private const KEY_FEATURE              = 'two_factor_authentication';
+	private const KEY_XMLRPC_LOGIN         = 'two_factor_authentication_xmlrpc_login';
 	private const OPTION_PREFIX            = 'cloudsecurewp_2fa_data_';
 	private const SESSION_EXPIRY           = 300;
 	private const CLEANUP_TIMEOUT          = 60;
@@ -41,11 +42,17 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 */
 	private $login_log;
 
-	function __construct( array $info, CloudSecureWP_Config $config, CloudSecureWP_Disable_Login $disable_login, CloudSecureWP_Login_Log $login_log ) {
+	/**
+	 * @var CloudSecureWP_Disable_XMLRPC
+	 */
+	private $disable_xmlrpc;
+
+	function __construct( array $info, CloudSecureWP_Config $config, CloudSecureWP_Disable_Login $disable_login, CloudSecureWP_Login_Log $login_log, CloudSecureWP_Disable_XMLRPC $disable_xmlrpc ) {
 		parent::__construct( $info );
-		$this->config        = $config;
-		$this->disable_login = $disable_login;
-		$this->login_log     = $login_log;
+		$this->config         = $config;
+		$this->disable_login  = $disable_login;
+		$this->login_log      = $login_log;
+		$this->disable_xmlrpc = $disable_xmlrpc;
 	}
 
 	/**
@@ -72,14 +79,17 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 * @return array
 	 */
 	public function get_default(): array {
-		return array( self::KEY_FEATURE => 'f' );
+		return array(
+			self::KEY_FEATURE      => 'f',
+			self::KEY_XMLRPC_LOGIN => '1',
+		);
 	}
 
 	/**
 	 * 設定値key取得
 	 */
 	public function get_keys(): array {
-		return array( self::KEY_FEATURE );
+		return array( self::KEY_FEATURE, self::KEY_XMLRPC_LOGIN );
 	}
 
 	/**
@@ -2257,5 +2267,177 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		$body .= "CloudSecure WP Security\n";
 
 		return $this->wp_send_mail( $to, esc_html( $subject ), esc_html( $body ) );
+	}
+
+	/**
+	 * 1.4.8 アップデート時にXML-RPCログイン制御のデフォルト値を設定
+	 * 既存環境で新キーが未設定の場合に拒否（1）を補完する
+	 *
+	 * @return void
+	 */
+	public function migrate_xmlrpc_login_default(): void {
+		$current = $this->config->get( self::KEY_XMLRPC_LOGIN );
+		if ( null === $current || '' === $current ) {
+			$this->config->set( self::KEY_XMLRPC_LOGIN, '1' );
+			$this->config->save();
+		}
+	}
+
+	/**
+	 * 1.4.8 アップデート時に対象ユーザーへの通知処理
+	 * XML-RPCログイン制御による影響がある可能性のある環境の全管理者が対応
+	 *
+	 * @return void
+	 */
+	public function send_update_notice(): void {
+		if ( $this->is_enabled() && ! ( $this->disable_xmlrpc->is_enabled() && $this->disable_xmlrpc->is_xmlrpc_disabled() ) ) {
+			update_option( 'cloudsecurewp_notice_148_xmlrpc', '1' );
+			add_action(
+				'plugins_loaded',
+				function() {
+					$this->send_148_update_mail();
+				},
+				10
+			);
+		}
+	}
+
+	/**
+	 * 1.4.8 アップデート通知メールを全管理者に送信
+	 */
+	private function send_148_update_mail(): void {
+		$admins = get_users( array( 'role' => 'administrator' ) );
+
+		$subject = '2段階認証のXML-RPCログイン制限に関するお知らせ';
+
+		$settings_url = admin_url( 'admin.php?page=cloudsecurewp_two_factor_authentication' );
+
+		$body  = "本プラグインのアップデートにより、2段階認証の設定に「XML-RPC経由のログインを遮断する」オプションが追加されました。\n";
+		$body .= "\n";
+		$body .= "このオプションはデフォルトで有効になっています。\n";
+		$body .= "外部アプリやスマートフォンアプリ等からXML-RPCを使用してログインしている場合、\n";
+		$body .= "2段階認証の対象権限グループに属するユーザーのログインが遮断されます。\n";
+		$body .= "\n";
+		$body .= "XML-RPC経由のログインを引き続き許可する場合は、下記の設定画面から変更してください。\n";
+		$body .= $settings_url . "\n";
+		$body .= "\n";
+		$body .= "--\n";
+		$body .= "CloudSecure WP Security\n";
+
+		foreach ( $admins as $admin ) {
+			$this->wp_send_mail( $admin->user_email, $subject, $body );
+		}
+	}
+
+	/**
+	 * 1.4.8 XML-RPCログイン制限追加の通知表示
+	 */
+	public function admin_notice_148_xmlrpc(): void {
+		if ( ! current_user_can( 'administrator' ) ) {
+			return;
+		}
+
+		if ( get_option( 'cloudsecurewp_notice_148_xmlrpc' ) !== '1' ) {
+			return;
+		}
+
+		$settings_url = admin_url( 'admin.php?page=cloudsecurewp_two_factor_authentication' );
+		$nonce        = wp_create_nonce( 'cloudsecurewp_dismiss_notice_148' );
+		?>
+		<div class="notice notice-warning" id="cloudsecurewp-notice-148">
+			<p><strong>【CloudSecure WP Security】</strong></p>
+			<p>アップデートにより、2段階認証機能の設定に「XML-RPC経由のログインを遮断する」オプションが追加されました。<br/>
+			このオプションは初期状態で有効になっており、2段階認証の対象権限グループに属するユーザーのXML-RPC経由のログインが遮断されます。<br/>
+			XML-RPCを利用してスマホアプリ等の外部ツールにログインしている方は、<a href="<?php echo esc_url( $settings_url ); ?>">設定画面</a>からご確認ください。</p>
+			<p><button type="button" class="button" id="cloudsecurewp-notice-148-btn">確認しました</button></p>
+		</div>
+		<script>
+		document.getElementById('cloudsecurewp-notice-148-btn').addEventListener('click', function() {
+			var xhr = new XMLHttpRequest();
+			xhr.open('POST', '<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>');
+			xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+			xhr.onload = function() {
+				if (xhr.status === 200) {
+					var el = document.getElementById('cloudsecurewp-notice-148');
+					if (el) el.remove();
+				}
+			};
+			xhr.send('action=cloudsecurewp_dismiss_notice_148&_wpnonce=<?php echo esc_js( $nonce ); ?>');
+		});
+		</script>
+		<?php
+	}
+
+	/**
+	 * 1.4.8 通知の確認ボタン押下時のAJAXハンドラー
+	 */
+	public function ajax_dismiss_notice_148(): void {
+		check_ajax_referer( 'cloudsecurewp_dismiss_notice_148' );
+
+		if ( ! current_user_can( 'administrator' ) ) {
+			wp_send_json_error();
+		}
+
+		delete_option( 'cloudsecurewp_notice_148_xmlrpc' );
+		wp_send_json_success();
+	}
+
+	/**
+	 * XML-RPC経由のログインが拒否設定かどうか
+	 *
+	 * @return bool
+	 */
+	public function is_xmlrpc_login_denied(): bool {
+		return $this->config->get( self::KEY_XMLRPC_LOGIN ) === '1';
+	}
+
+	/**
+	 * XML-RPC経由のログインを拒否すべきかどうかを判定
+	 * 2FA有効 かつ XML-RPCログイン拒否設定 かつ ユーザーが2FA対象ロールの場合にtrueを返す
+	 *
+	 * @param WP_User $user
+	 *
+	 * @return bool
+	 */
+	public function should_deny_xmlrpc_login( $user ): bool {
+		if ( ! $this->is_enabled() ) {
+			return false;
+		}
+
+		if ( ! $this->is_xmlrpc_login_denied() ) {
+			return false;
+		}
+
+		if ( ! ( $user instanceof WP_User ) || ! isset( $user->roles[0] ) ) {
+			return false;
+		}
+
+		return $this->is_role_enabled( $user->roles[0] );
+	}
+
+	/**
+	 * XML-RPC認証時にログインを拒否するフィルタコールバック
+	 * authenticateフィルタから呼ばれ、対象ユーザーの場合WP_Errorを返す
+	 *
+	 * @param WP_User|WP_Error|null $user
+	 * @param string                $username
+	 * @param string                $password
+	 *
+	 * @return WP_User|WP_Error|null
+	 */
+	public function deny_xmlrpc_authentication( $user, $username, $password ) {
+		if ( $user instanceof WP_User ) {
+			$user_obj = $user;
+		} else {
+			$user_obj = get_user_by( 'login', $username );
+			if ( ! $user_obj ) {
+				$user_obj = get_user_by( 'email', $username );
+			}
+		}
+
+		if ( $user_obj && $this->should_deny_xmlrpc_login( $user_obj ) ) {
+			return new WP_Error( 'xmlrpc_login_denied', 'XML-RPC経由のログインは許可されていません。' );
+		}
+		return $user;
 	}
 }

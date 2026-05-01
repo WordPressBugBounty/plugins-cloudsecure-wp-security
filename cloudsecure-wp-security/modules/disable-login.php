@@ -212,10 +212,16 @@ class CloudSecureWP_Disable_Login extends CloudSecureWP_Common {
 	/**
 	 * wp_login_failed
 	 *
-	 * @param string $user_name
+	 * @param string        $user_name
+	 * @param WP_Error|null $error
 	 * @return void
 	 */
-	public function wp_login_failed( $user_name ): void {
+	public function wp_login_failed( $user_name, $error = null ): void {
+		// 2段階認証のXML-RPCログイン拒否の場合はカウントしない
+		if ( is_wp_error( $error ) && $error->get_error_code() === 'xmlrpc_login_denied' ) {
+			return;
+		}
+
 		global $wpdb;
 
 		$this->set_login_status( self::LOGIN_STATUS_FAILED );

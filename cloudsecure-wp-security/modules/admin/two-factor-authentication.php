@@ -36,6 +36,10 @@ class CloudSecureWP_Admin_Two_Factor_Authentication extends CloudSecureWP_Admin_
 
 					$this->datas[ $key ] = $tmp;
 				}
+
+				if ( 'two_factor_authentication_xmlrpc_login' === $key ) {
+					$this->datas[ $key ] = isset( $_POST['two_factor_authentication_xmlrpc_login_deny'] ) ? '1' : '0';
+				}
 			}
 
 			if ( empty( $this->errors ) ) {
@@ -116,6 +120,19 @@ class CloudSecureWP_Admin_Two_Factor_Authentication extends CloudSecureWP_Admin_
 							<?php endforeach; ?>
 							<p class="description">
 								ユーザーごとの設定状況（未設定/設定済）は <a href="<?php echo esc_url( admin_url( 'users.php' ) ); ?>">ユーザー一覧</a> 画面で確認してください。
+							</p>
+						</div>
+					</div>
+					<div class="box-row flex-start">
+						<div class="box-row-title not-label">2段階認証の適用範囲</div>
+						<div class="box-row-content">
+							<input type="checkbox" class="checkbox" id="two_factor_authentication_xmlrpc_login_deny"
+									name="two_factor_authentication_xmlrpc_login_deny"
+									value="1"<?php checked( $this->datas['two_factor_authentication_xmlrpc_login'] === '1' ); ?> />
+							<label for="two_factor_authentication_xmlrpc_login_deny">XML-RPC経由のログインを遮断する</label>
+							<br/>
+							<p class="description">
+								チェックを外すとXML-RPC経由のログインが可能になりますが、2段階認証は適用されません。<a class="title-block-link" target="_blank" href="https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security/two_factor_authentication.php#two_factor_authentication-scope">詳細はこちら</a>
 							</p>
 						</div>
 					</div>

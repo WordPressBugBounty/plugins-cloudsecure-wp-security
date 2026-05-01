@@ -142,6 +142,10 @@ class CloudSecureWP_Disable_RESTAPI extends CloudSecureWP_Common {
 		$route           = $request->get_route();
 
 		foreach ( $exclude_plugins as $plugin ) {
+			if ( empty( $plugin ) ) {
+				continue;
+			}
+
 			// snow-monkey対応
 			if ( $plugin === 'snow-monkey-forms' ) {
 				$plugin = 'snow-monkey-form';
@@ -152,7 +156,7 @@ class CloudSecureWP_Disable_RESTAPI extends CloudSecureWP_Common {
 				$plugin = 'wc';
 			}
 
-			if ( false !== strpos( $route, "/$plugin/" ) ) {
+			if ( strpos( $route, "/$plugin/" ) === 0 ) {
 				return $result;
 			}
 		}

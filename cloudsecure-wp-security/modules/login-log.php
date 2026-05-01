@@ -168,9 +168,15 @@ class CloudSecureWP_Login_Log extends CloudSecureWP_Common {
 	/**
 	 * ログイン失敗時
 	 */
-	public function wp_login_failed( $user_login ) {
-		$ip     = $this->get_client_ip();
-		$status = $this->disable_login->get_login_status();
+	public function wp_login_failed( $user_login, $error = null ) {
+		$ip = $this->get_client_ip();
+
+		if ( is_wp_error( $error ) && $error->get_error_code() === 'xmlrpc_login_denied' ) {
+			$status = self::LOGIN_STATUS_DISABLED;
+		} else {
+			$status = $this->disable_login->get_login_status();
+		}
+
 		$method = $this->is_xmlrpc() ? self::METHOD_XMLRPC : self::METHOD_PAGE;
 		$this->write_log( $user_login, $ip, $status, $method );
 	}
