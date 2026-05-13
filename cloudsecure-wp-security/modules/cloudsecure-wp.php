@@ -268,10 +268,16 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			}
 
 			if ( $this->two_factor_authentication->is_enabled() && 'xmlrpc.php' !== basename( sanitize_text_field( $_SERVER['SCRIPT_NAME'] ) ) && ! is_admin() ) {
-				add_action( 'login_init', array( $this->two_factor_authentication, 'restore_rememberme' ), 0, 0 );
-				add_filter( 'authenticate', array( $this->two_factor_authentication, 'restore_login_session' ), 0, 3 );
+				// エラーメッセージ表示
+				add_filter( 'wp_login_errors', array( $this->two_factor_authentication, 'filter_login_errors' ), 10, 2 );
+				// id・passの認証
 				add_filter( 'authenticate', array( $this->two_factor_authentication, 'two_factor_disable_login_check' ), 100, 3 );
-				add_filter( 'authenticate', array( $this->two_factor_authentication, 'authenticate_with_two_factor' ), 101, 3 );
+				add_filter( 'authenticate', array( $this->two_factor_authentication, 'block_auth_cookies_for_2fa_user' ), PHP_INT_MAX, 3 );
+				add_action( 'set_auth_cookie', array( $this->two_factor_authentication, 'collect_auth_cookie_tokens' ), 10, 1 );
+				add_action( 'set_logged_in_cookie', array( $this->two_factor_authentication, 'collect_auth_cookie_tokens' ), 10, 1 );
+				add_action( 'wp_login', array( $this->two_factor_authentication, 'maybe_show_two_factor_login' ), 0, 2 );
+				// 2FAコードの認証
+				add_action( 'login_form_cloudsecurewp_validate_2fa', array( $this->two_factor_authentication, 'validate_two_factor_login' ) );
 				add_action( 'wp_login', array( $this->two_factor_authentication, 'redirect_if_not_two_factor_authentication_registered' ), 10, 2 );
 			}
 

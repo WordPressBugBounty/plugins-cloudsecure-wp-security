@@ -47,6 +47,20 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 */
 	private $disable_xmlrpc;
 
+	/**
+	 * 1段階目で WordPress が作成したセッショントークンを収集する配列
+	 *
+	 * @var array
+	 */
+	private $password_auth_tokens = array();
+
+	/**
+	 * 2FA完了処理中フラグ（wp_login の再帰防止）
+	 *
+	 * @var bool
+	 */
+	private $completing_2fa_login = false;
+
 	function __construct( array $info, CloudSecureWP_Config $config, CloudSecureWP_Disable_Login $disable_login, CloudSecureWP_Login_Log $login_log, CloudSecureWP_Disable_XMLRPC $disable_xmlrpc ) {
 		parent::__construct( $info );
 		$this->config         = $config;
@@ -242,8 +256,8 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	private function login_form( string $login_token, int $auth_method, bool $has_recovery, string $email_address, int $remaining_seconds ) {
 		?>
 		<form name="loginform" id="loginform"
-				action="<?php echo esc_url( site_url( 'wp-login.php', 'login_post' ) ); ?>" method="post">
-				<?php wp_nonce_field( $this->get_feature_key() . '_csrf' ); ?>
+				action="<?php echo esc_url( site_url( 'wp-login.php?action=cloudsecurewp_validate_2fa', 'login_post' ) ); ?>" method="post">
+				<?php wp_nonce_field( $this->get_feature_key() . '_csrf_' . $login_token ); ?>
 			<div class="two-fa-form">
 				<input type="hidden" name="login_token" value="<?php echo esc_attr( $login_token ); ?>">
 				<input type="hidden" name="redirect_to"
@@ -560,6 +574,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 * 2段階認証画面を表示
 	 *
 	 * @param string $login_token
+	 * @param int    $user_id
 	 * @param int    $auth_method
 	 * @param bool   $has_recovery
 	 * @param string $email_address
@@ -567,7 +582,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 *
 	 * @return void
 	 */
-	private function show_two_factor_form( string $login_token, int $auth_method, bool $has_recovery, string $email_address, bool $is_send_email ): void {
+	private function show_two_factor_form( string $login_token, int $user_id, int $auth_method, bool $has_recovery, string $email_address, bool $is_send_email ): void {
 		$message           = '';
 		$error             = '';
 		$remaining_seconds = 0;
@@ -592,7 +607,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 
 		if ( $auth_method === self::USER_AUTH_METHOD_EMAIL ) {
 			// メール認証の場合、送信可能になるまでの残り秒数を計算
-			$able_send_time    = $this->get_email_able_send_time( $this->get_option_data( $this->create_option_key( $login_token ) )['user_id'] );
+			$able_send_time    = $this->get_email_able_send_time( $user_id );
 			$remaining_seconds = max( 0, $able_send_time - time() );
 		}
 
@@ -672,34 +687,13 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		return CloudSecureWP_Time_Based_One_Time_Password::verify_code( $secret_key, $code, self::AUTH_APP_INTERVAL );
 	}
 
-	/**
-	 * login_init フック: rememberme 復元処理
-	 *
-	 * @return void
-	 */
-	public function restore_rememberme(): void {
-		// 2FAコード送信POST以外は何もしない
-		if ( ! isset( $_POST['authenticator_code'], $_POST['login_token'] ) ) {
-			return;
-		}
-
-		$login_token = sanitize_text_field( $_POST['login_token'] );
-		$option_key  = $this->create_option_key( $login_token );
-		$option_data = $this->get_option_data( $option_key );
-
-		// 期限切れ・取得失敗時は何もしない
-		if ( $option_data === false ) {
-			return;
-		}
-
-		// 保存された rememberme が forever の場合のみ $_POST を上書き
-		if ( isset( $option_data['rememberme'] ) && 'forever' === $option_data['rememberme'] ) {
-			$_POST['rememberme'] = 'forever';
-		}
-	}
+	// =========================================================================
+	// 新ログインフロー: id・passの認証 (authenticate チェーン → wp_login)
+	// =========================================================================
 
 	/**
-	 * 認証フック: ログインデータ復元処理
+	 * authenticate フィルター（優先度 PHP_INT_MAX）:
+	 * 2FA対象ユーザーの認証Cookie送信をブロックする
 	 *
 	 * @param mixed  $user
 	 * @param string $username
@@ -707,39 +701,178 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 *
 	 * @return mixed
 	 */
-	public function restore_login_session( $user, $username, $password ) {
-		// 初回アクセス・または初回認証の場合、何もしない
-		if ( ! isset( $_POST['authenticator_code'] ) ) {
+	public function block_auth_cookies_for_2fa_user( $user, $username, $password ) {
+		if ( ! ( $user instanceof WP_User ) ) {
 			return $user;
 		}
 
-		// CSRFトークンを検証
-		if ( wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ?? '' ) ), $this->get_feature_key() . '_csrf' ) === false ) {
-			return new WP_Error( 'empty_username', 'セッションの有効期限が切れました。再度ログインしてください。' );
+		$auth_info = $this->get_2fa_auth_info( $user->ID );
+		if ( count( $auth_info ) === 0 ) {
+			$auth_info = $this->repair_migration_gaps( $user->ID );
+		}
+		$has_2fa_secret = count( $auth_info ) > 0 && ! empty( $auth_info['secret'] );
+
+		if ( $this->is_2fa_required( $user ) && $has_2fa_secret && did_action( 'login_init' ) ) {
+			add_filter( 'send_auth_cookies', '__return_false', PHP_INT_MAX );
+		}
+		return $user;
+	}
+
+	/**
+	 * set_auth_cookie / set_logged_in_cookie フック:
+	 * WordPressコアがDBに作成したセッショントークンを収集する
+	 *
+	 * @param string $cookie クッキー文字列
+	 *
+	 * @return void
+	 */
+	public function collect_auth_cookie_tokens( $cookie ): void {
+		$parsed = wp_parse_auth_cookie( $cookie );
+		if ( ! empty( $parsed['token'] ) ) {
+			$this->password_auth_tokens[] = $parsed['token'];
+		}
+	}
+
+	/**
+	 * wp_login アクション（優先度 0）:
+	 * 2FA対象ユーザーの場合、セッションを作成して2FA画面を表示し exit する
+	 *
+	 * @param string  $user_login
+	 * @param WP_User $user
+	 *
+	 * @return void
+	 */
+	public function maybe_show_two_factor_login( $user_login, $user ): void {
+		// 2段階認証が完了している場合
+		if ( $this->completing_2fa_login ) {
+			return;
+		}
+
+		// 2段階認証が不要な場合
+		if ( ! $this->is_2fa_required( $user ) ) {
+			return;
+		}
+
+		// 認証情報の取得
+		$auth_info = $this->get_2fa_auth_info( $user->ID );
+		if ( count( $auth_info ) === 0 || empty( $auth_info['secret'] ) ) {
+			return;
+		}
+
+		// WordPressコアがDBに作成したセッショントークンを破棄
+		$this->destroy_collected_session_tokens( $user->ID );
+		wp_clear_auth_cookie();
+
+		// リカバリーコードの有無
+		$has_recovery   = true;
+		$recovery_codes = $auth_info['recovery'];
+		if ( ! $recovery_codes || ! is_array( $recovery_codes ) || count( $recovery_codes ) === 0 ) {
+			$has_recovery = false;
+		}
+
+		// option key生成
+		$session_token = bin2hex( random_bytes( 16 ) );
+		$option_key    = $this->create_option_key( $session_token );
+
+		// 保存用ログインデータ作成
+		$option_data = array(
+			'user_id'       => $user->ID,
+			'user_login'    => sanitize_text_field( $_POST['log'] ?? '' ),
+			'ip'            => $this->get_client_ip(),
+			'auth_method'   => intval( $auth_info['method'] ),
+			'expires'       => time() + self::SESSION_EXPIRY,
+			'created'       => time(),
+			'has_recovery'  => $has_recovery,
+			'email_address' => $this->mask_email( $user->ID ),
+			'rememberme'    => sanitize_text_field( $_POST['rememberme'] ?? '' ),
+		);
+
+		// データを保存
+		$this->set_option_data( $option_key, $option_data );
+
+		// メール認証の場合、コードを生成して送信
+		if ( intval( $auth_info['method'] ) === self::USER_AUTH_METHOD_EMAIL ) {
+			$this->send_2fa_email( $user->ID, $auth_info['secret'] );
+		}
+
+		// 2FA画面を表示して、処理終了
+		$this->show_two_factor_form(
+			$session_token,
+			$user->ID,
+			intval( $auth_info['method'] ),
+			$has_recovery,
+			$option_data['email_address'],
+			false
+		);
+	}
+
+	/**
+	 * 収集したセッショントークンをDBから破棄する
+	 *
+	 * @param int $user_id
+	 *
+	 * @return void
+	 */
+	private function destroy_collected_session_tokens( int $user_id ): void {
+		if ( empty( $this->password_auth_tokens ) ) {
+			return;
+		}
+		$manager = WP_Session_Tokens::get_instance( $user_id );
+		foreach ( $this->password_auth_tokens as $token ) {
+			$manager->destroy( $token );
+		}
+		$this->password_auth_tokens = array();
+	}
+
+	// =========================================================================
+	// 新ログインフロー: 2FAコードの認証 (login_form_cloudsecurewp_validate_2fa)
+	// =========================================================================
+
+	/**
+	 * login_form_cloudsecurewp_validate_2fa アクション：
+	 * 2FAコードの検証を行う専用エントリポイント
+	 *
+	 * @return void
+	 */
+	public function validate_two_factor_login(): void {
+		// GETリクエストはエラー・ログなしでログインページへリダイレクト
+		if ( ! isset( $_SERVER['REQUEST_METHOD'] ) || 'POST' !== strtoupper( $_SERVER['REQUEST_METHOD'] ) ) {
+			wp_safe_redirect( wp_login_url() );
+			exit;
 		}
 
 		// ログイントークンを取得
 		$login_token = sanitize_text_field( $_POST['login_token'] ?? '' );
 
+		// CSRFトークンを検証
+		if ( wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ?? '' ) ), $this->get_feature_key() . '_csrf_' . $login_token ) === false ) {
+			$this->redirect_to_login( 'session_expired' );
+		}
+
 		// ログイン情報を取得
 		$option_key  = $this->create_option_key( $login_token );
 		$option_data = $this->get_option_data( $option_key );
-
-		// ログインが有効期限切れの場合
-		// ログイン成功時にまとめてクリーンアップ処理を実行するため、ここでは消さない
 		if ( $option_data === false ) {
-			return new WP_Error( 'empty_username', 'セッションの有効期限が切れました。再度ログインしてください。' );
+			$this->redirect_to_login( 'session_expired' );
 		}
 
-		// ユーザーオブジェクト取得
+		// ユーザー存在確認
 		$user = get_user_by( 'id', $option_data['user_id'] );
 		if ( ! $user ) {
 			$this->delete_option_data( $option_key );
-			return new WP_Error( 'empty_username', 'ユーザー情報が見つかりません。再度ログインしてください。' );
+			$this->redirect_to_login( 'user_not_found' );
+		}
+
+		// レートリミットチェック
+		$limit_time = $this->two_factor_rate_limit();
+		if ( $limit_time > 0 ) {
+			$this->write_log( self::LOGIN_STATUS_DISABLED, $user->user_login );
+			$this->delete_option_data( $option_key );
+			$this->redirect_to_login( 'rate_limited' );
 		}
 
 		// 認証方法の設定
-		$auth_method = intVal( $option_data['auth_method'] );
+		$auth_method = intval( $option_data['auth_method'] );
 
 		// 認証コード再送信
 		if ( isset( $_POST['resend_2fa_email'] ) ) {
@@ -748,6 +881,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 
 			$this->show_two_factor_form(
 				$login_token,
+				$option_data['user_id'],
 				$auth_method,
 				$option_data['has_recovery'],
 				$option_data['email_address'],
@@ -759,6 +893,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		if ( isset( $_POST['use_recovery_code'] ) ) {
 			$this->show_two_factor_form(
 				$login_token,
+				$option_data['user_id'],
 				self::USER_AUTH_METHOD_RECOVERY,
 				$option_data['has_recovery'],
 				$option_data['email_address'],
@@ -770,6 +905,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		if ( isset( $_POST['back_to_auth_code'] ) ) {
 			$this->show_two_factor_form(
 				$login_token,
+				$option_data['user_id'],
 				$auth_method,
 				$option_data['has_recovery'],
 				$option_data['email_address'],
@@ -777,18 +913,142 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			);
 		}
 
-		// リカバリコードでの認証の場合
+		// リカバリーコードでの認証の場合
+		$verify_method = $auth_method;
 		if ( isset( $_POST['recovery_code'] ) ) {
-			$auth_method = self::USER_AUTH_METHOD_RECOVERY;
+			$verify_method = self::USER_AUTH_METHOD_RECOVERY;
 		}
 
-		// ログイン情報の復元
-		$_POST['log']           = $option_data['user_login'];
-		$_POST['auth_method']   = $auth_method;
-		$_POST['has_recovery']  = $option_data['has_recovery'];
-		$_POST['email_address'] = $option_data['email_address'];
+		// 認証コード取得
+		$auth_code = sanitize_text_field( $_POST['authenticator_code'] ?? '' );
 
-		return $user;
+		// 2FAコード検証
+		if ( $this->verify_2fa_code( $user->ID, $auth_code, $verify_method ) ) {
+			// 認証成功の場合
+			$this->complete_two_factor_login( $user, $option_data, $option_key );
+		}
+
+		// 認証失敗の場合
+		// 失敗回数をインクリメント
+		$this->increment_fail_count();
+
+		$this->write_log( self::LOGIN_STATUS_FAILED, $option_data['user_login'] );
+
+		// レートリミットの確認
+		$limit_time = $this->two_factor_rate_limit();
+		if ( $limit_time > 0 ) {
+			// レートリミットが発動した場合、ログイン画面にリダイレクト
+			$this->delete_option_data( $option_key );
+			$this->redirect_to_login( 'rate_limited' );
+		}
+
+		// 2FA画面を再表示して、処理終了
+		$this->show_two_factor_form(
+			$login_token,
+			$option_data['user_id'],
+			$verify_method,
+			$option_data['has_recovery'],
+			$option_data['email_address'],
+			false
+		);
+	}
+
+	/**
+	 * 2FA認証成功後のログイン完了処理
+	 *
+	 * @param WP_User $user
+	 * @param array   $option_data
+	 * @param string  $option_key
+	 *
+	 * @return void
+	 */
+	private function complete_two_factor_login( WP_User $user, array $option_data, string $option_key ): void {
+		// 失敗回数をリセット
+		$this->reset_fail_count();
+		// セッションデータを削除
+		$this->delete_option_data( $option_key );
+		// メール認証の送信可能時刻をリセット
+		$this->delete_email_able_send_time( $user->ID );
+
+		// ログインCookieを発行
+		$remember = ( isset( $option_data['rememberme'] ) && 'forever' === $option_data['rememberme'] );
+		wp_set_auth_cookie( $user->ID, $remember );
+
+		// 再帰防止フラグ
+		$this->completing_2fa_login = true;
+
+		// wp_login を明示発火（ログイン履歴 / ログイン通知 / 管理画面制限更新が実行される）
+		do_action( 'wp_login', $user->user_login, $user );
+
+		// リダイレクトURLの検証とリダイレクト
+		$redirect_to = wp_validate_redirect( wp_unslash( $_POST['redirect_to'] ?? '' ), admin_url() );
+		$redirect_to = apply_filters( 'login_redirect', $redirect_to, $redirect_to, $user );
+		wp_safe_redirect( $redirect_to );
+		exit;
+	}
+
+	/**
+	 * ログインページにリダイレクト（エラーメッセージ付き）
+	 *
+	 * @param string $error_code エラーコード
+	 *
+	 * @return never
+	 */
+	private function redirect_to_login( string $error_code ): void {
+		$url = add_query_arg( 'cloudsecurewp_2fa_error', $error_code, wp_login_url() );
+		wp_safe_redirect( $url );
+		exit;
+	}
+
+	/**
+	 * wp_login_errors フィルター:
+	 * リダイレクト時のクエリパラメータに応じてエラーメッセージを表示
+	 *
+	 * @param WP_Error $errors
+	 * @param string   $redirect_to
+	 *
+	 * @return WP_Error
+	 */
+	public function filter_login_errors( WP_Error $errors, string $redirect_to ): WP_Error {
+		if ( ! isset( $_GET['cloudsecurewp_2fa_error'] ) ) {
+			return $errors;
+		}
+
+		$error_code = sanitize_text_field( $_GET['cloudsecurewp_2fa_error'] );
+		switch ( $error_code ) {
+			case 'session_expired':
+				$errors->add( 'cloudsecurewp_2fa_session_expired', 'セッションの有効期限が切れました。再度ログインしてください。' );
+				break;
+			case 'user_not_found':
+				$errors->add( 'cloudsecurewp_2fa_user_not_found', 'ユーザー情報が見つかりません。再度ログインしてください。' );
+				break;
+			case 'rate_limited':
+				$limit_time = $this->two_factor_rate_limit();
+				if ( $limit_time > 0 ) {
+					$errors->add( 'cloudsecurewp_2fa_rate_limited', "失敗回数が上限に達したため、{$limit_time}分間ログインできません。しばらく待ってから再度お試しください。" );
+				}
+				break;
+			default:
+				break;
+		}
+
+		// ページ表示後にURLからクエリパラメータを削除（リロード時に再表示されないようにする）
+		add_action(
+			'login_footer',
+			function() {
+				?>
+				<script>
+				if ( window.history && window.history.replaceState ) {
+					var url = new URL( window.location.href );
+					url.searchParams.delete( 'cloudsecurewp_2fa_error' );
+					window.history.replaceState( {}, '', url.toString() );
+				}
+				</script>
+				<?php
+			}
+		);
+
+		return $errors;
 	}
 
 	/**
@@ -801,138 +1061,22 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 * @return mixed
 	 */
 	public function two_factor_disable_login_check( $user, $username, $password ) {
+		// GETリクエストはレートリミットチェックを行わない
+		if ( ! isset( $_SERVER['REQUEST_METHOD'] ) || 'POST' !== strtoupper( $_SERVER['REQUEST_METHOD'] ) ) {
+			return $user;
+		}
+
 		// レートリミットの無効時間を取得
 		$limit_time = $this->two_factor_rate_limit();
 		if ( $limit_time > 0 ) {
 			// ログインログに記録
-			$this->write_log( self::LOGIN_STATUS_DISABLED );
+			$this->write_log( self::LOGIN_STATUS_DISABLED, sanitize_text_field( $_POST['log'] ?? '' ) );
 
 			return new WP_Error( 'empty_username', "失敗回数が上限に達したため、{$limit_time}分間ログインできません。しばらく待ってから再度お試しください。" );
 		}
 		return $user;
 	}
 
-
-	/**
-	 * 認証フック: 2段階認証処理
-	 *
-	 * @param mixed  $user
-	 * @param string $username
-	 * @param string $password
-	 *
-	 * @return mixed
-	 */
-	public function authenticate_with_two_factor( $user, $username, $password ) {
-		// 初回アクセス、または初回認証時
-		if ( ! isset( $_POST['authenticator_code'] ) ) {
-			// 認証失敗の場合
-			if ( is_wp_error( $user ) ) {
-				return $user;
-			}
-
-			// 2段階認証が不要な場合
-			if ( ! $this->is_2fa_required( $user ) ) {
-				return $user;
-			}
-
-			// 認証情報の取得
-			$auth_info = $this->get_2fa_auth_info( $user->ID );
-			// 認証情報が存在しない場合
-			if ( count( $auth_info ) === 0 ) {
-				// データ移行漏れ対応
-				$auth_info = $this->repair_migration_gaps( $user->ID );
-				if ( count( $auth_info ) === 0 ) {
-					return $user;
-				}
-			}
-
-			// リカバリーコードの有無
-			$has_recovery   = true;
-			$recovery_codes = $auth_info['recovery'];
-			if ( ! $recovery_codes || ! is_array( $recovery_codes ) || count( $recovery_codes ) === 0 ) {
-				$has_recovery = false;
-			}
-
-			// option key生成
-			$session_token = bin2hex( random_bytes( 16 ) );
-			$option_key    = $this->create_option_key( $session_token );
-
-			// 保存用ログインデータ作成
-			$option_data = array(
-				'user_id'         => $user->ID,
-				'user_login'      => sanitize_text_field( $_POST['log'] ?? '' ),
-				'auth_method'     => intVal( $auth_info['method'] ),
-				'expires'         => time() + self::SESSION_EXPIRY,
-				'created'         => time(),
-				'has_recovery'    => $has_recovery,
-				'email_address'   => $this->mask_email( $user->ID ),
-				'rememberme'      => sanitize_text_field( $_POST['rememberme'] ?? '' ),
-			);
-
-			// データを保存
-			$this->set_option_data( $option_key, $option_data );
-
-			// メール認証の場合、コードを生成して送信
-			if ( intVal( $auth_info['method'] ) === self::USER_AUTH_METHOD_EMAIL ) {
-				$result = $this->send_2fa_email( $user->ID, $auth_info['secret'] );
-			}
-
-			// 2FA画面を表示して、処理終了
-			$this->show_two_factor_form(
-				$session_token,
-				intVal( $auth_info['method'] ),
-				$has_recovery,
-				$option_data['email_address'],
-				false
-			);
-		}
-
-		// 2FA関連のPOSTデータ取得
-		$login_token = sanitize_text_field( $_POST['login_token'] ?? '' );
-		$auth_code   = sanitize_text_field( $_POST['authenticator_code'] ?? '' );
-
-		// option key取得
-		$option_key = $this->create_option_key( $login_token );
-
-		// $userがWP_Errorの場合は処理をスキップ
-		if ( is_wp_error( $user ) ) {
-			return $user;
-		}
-
-		// 2段階認証成功の場合
-		if ( $this->verify_2fa_code( $user->ID, $auth_code, intval( $_POST['auth_method'] ) ) ) {
-			// 失敗回数をリセット
-			$this->reset_fail_count();
-			// セッションデータを削除
-			$this->delete_option_data( $option_key );
-			// メール認証の送信可能時間をリセット
-			$this->delete_email_able_send_time( $user->ID );
-			return $user;
-		}
-
-		// 2段階認証失敗の場合
-		// 失敗回数をインクリメント
-		$this->increment_fail_count();
-
-		// レートリミットの確認
-		$limit_time = $this->two_factor_rate_limit();
-
-		$this->write_log( self::LOGIN_STATUS_FAILED );
-
-		if ( $limit_time > 0 ) {
-			// ステータス無効状態の場合
-			return new WP_Error( 'empty_username', "失敗回数が上限に達したため、{$limit_time}分間ログインできません。しばらく待ってから再度お試しください。" );
-		}
-
-		// 2FA画面を再表示して、処理終了
-		$this->show_two_factor_form(
-			$login_token,
-			intval( $_POST['auth_method'] ),
-			(bool) $_POST['has_recovery'],
-			sanitize_email( wp_unslash( $_POST['email_address'] ?? '' ) ),
-			false
-		);
-	}
 
 	/**
 	 * 2FAセッションデータを取得
@@ -1006,8 +1150,8 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 
 				// ログ登録用データを収集
 				$log_data[] = array(
-					'name'     => $data['user_login'],
-					'ip'       => $this->get_client_ip(),
+					'name'     => $data['user_login'] ?? '',
+					'ip'       => $data['ip'] ?? $this->get_client_ip(),
 					'status'   => self::LOGIN_STATUS_FAILED,
 					'method'   => self::METHOD_PAGE,
 					'login_at' => wp_date( 'Y-m-d H:i:s', $data['created'] ), // WPのタイムゾーンに変更して登録
@@ -1419,11 +1563,10 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 *
 	 * @return void
 	 */
-	private function write_log( int $status ): void {
+	private function write_log( int $status, string $name ): void {
 		global $wpdb;
 
 		// ログインログに記録
-		$name   = sanitize_text_field( $_POST['log'] ?? '' );
 		$ip     = $this->get_client_ip();
 		$method = $this->login_log->is_xmlrpc() ? self::METHOD_XMLRPC : self::METHOD_PAGE;
 		$this->login_log->write_log( $name, $ip, $status, $method );

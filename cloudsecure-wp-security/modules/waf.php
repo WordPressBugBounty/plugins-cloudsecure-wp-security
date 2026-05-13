@@ -328,16 +328,24 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 		$waf_rules           = $this->waf_rules->get_waf_rules();
 		$locationmatch_rules = $this->waf_rules->get_locationmatch_rules();
 		$remove_rules        = array(
-			'ajax_editor'    => array('950001', '950901', '950004', '950904', '950006', '950906', '950007', '950907', '950908', '950013', '950019', 'm340095' ),
-			'ajax_customize' => array( '950904', '950906', '950004', '950001', '950007' ),
-			'rest_api'       => array( '950004', '950001', '950007', '950006' ),
-			'comment'        => array( '950004' ),
-			'cocoon'         => array( '950004' ),
-			'emanon'         => array( '950004', '950001', '950007' ),
-			'vkexunit'       => array( '950004', '950001', '950007' ),
-			'nishiki'        => array( '950004', '950001', '950007' ),
-			'swell'          => array( '950004', '950001', '950007' ),
-			'woocommerce'    => array( '959006' ),
+			'ajax_editor'       => array('950001', '950901', '950004', '950904', '950006', '950906', '950007', '950907', '950908', '950013', '950019', 'm340095' ),
+			'ajax_customize'    => array( '950904', '950906', '950004', '950001', '950007' ),
+			'rest_api'          => array( '950004', '950001', '950007', '950006' ),
+			'comment'           => array( '950004' ),
+			'cocoon'            => array( '950004' ),
+			'emanon'            => array( '950004', '950001', '950007' ),
+			'vkexunit'          => array( '950004', '950001', '950007' ),
+			'nishiki'           => array( '950004', '950001', '950007' ),
+			'swell'             => array( '950004', '950001', '950007' ),
+			'woocommerce'       => array( '959006' ),
+			'rename_login_page' => array(
+				'login_page_name' => $this->config->get( 'rename_login_page' ) === 't' ? $this->config->get( 'rename_login_page_name' ) : '',
+				'rule_ids'        => array(
+					'950007', '959007', '950904', '959904', '950001', '959001',
+					'950906', '959906', '950908', '959908', '950004', '959004',
+					'950006', '959006', '950907', '959907', '950013', '959013',
+				),
+			),
 		);
 
 		$results = $this->waf_engine( $waf_rules, $locationmatch_rules, $settings[ self::KEY_AVAILABLE_RULES ], $remove_rules );

@@ -25,7 +25,7 @@ class CloudSecureWP_Admin_Rename_Login_Page extends CloudSecureWP_Admin_Common {
 		$is_renamed = sanitize_text_field( $_GET['renamed'] ?? '' );
 		if ( 't' === $is_renamed ) {
 			$this->messages[]           = 'ログインURL変更機能が有効になりました。';
-			$this->important_messages[] = '<a href="' . site_url() . '/' . $this->datas['rename_login_page_name'] . '" target="__blank">新しいログインページURL</a>をブックマークしてください';
+			$this->important_messages[] = '<a href="' . esc_url( site_url() . '/' . $this->datas['rename_login_page_name'] ) . '" target="__blank">新しいログインページURL</a>をブックマークしてください';
 
 		} elseif ( 'f' === $is_renamed ) {
 			$this->messages[] = 'ログインURL変更機能が無効になりました。';

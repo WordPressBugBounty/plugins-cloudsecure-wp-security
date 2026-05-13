@@ -654,6 +654,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	public function is_remove_rule( $rule_id, $request_items, $remove_rules, $acf_post_types, $cptui_post_types ): array {
 		$is_rule_removed         = false;
 		$modify_remove_variables = array();
+		$modify_variables        = array();
 
 		if ( isset( $remove_rules['woocommerce'] ) ) {
 			if ( in_array( $rule_id, $remove_rules['woocommerce'], true ) ) {
@@ -912,9 +913,51 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 				}
 			}
 		}
+
+		if ( isset( $remove_rules['rename_login_page'] ) ) {
+			$login_page_name = $remove_rules['rename_login_page']['login_page_name'];
+			$is_target_rule  = in_array( $rule_id, $remove_rules['rename_login_page']['rule_ids'], true );
+
+			if ( $is_target_rule ) {
+				// ログインURL変更設定保存時：rename_login_page_nameキーの値のみ除外
+				if ( preg_match( '/wp-admin\/admin\.php/', $request_items['request_filename'] ) === 1 ) {
+					if ( ( $request_items['args']['page'] ?? '' ) === 'cloudsecurewp_rename_login_page' ) {
+						$modify_remove_variables['args'] = array( 'rename_login_page_name' );
+					}
+				}
+
+				// 変更後ログインURLへのアクセス時、またはリファラーが変更後ログインURLである時の対応
+				if ( ! empty( $login_page_name ) ) {
+					$login_page_pattern    = '/\/' . preg_quote( $login_page_name, '/' ) . '(?:[\/\?#]|$)/';
+					$is_login_page_access  = preg_match( $login_page_pattern, $request_items['request_filename'] ) === 1;
+					$is_login_page_referer = preg_match( $login_page_pattern, $_SERVER['HTTP_REFERER'] ?? '' ) === 1;
+
+					if ( $is_login_page_access ) {
+						// 1. URI自体に誤検知ワードが含まれるため、request_filenameを除外
+						$modify_variables[] = self::VARIABLE_REQUEST_FILENAME;
+
+						// 2. args の特定キー（リダイレクト系など）を除外
+						if ( ! isset( $modify_remove_variables['args'] ) ) {
+							$modify_remove_variables['args'] = array();
+						}
+						$modify_remove_variables['args'] = array_merge( $modify_remove_variables['args'], array( 'redirect_to', '_wp_http_referer' ) );
+					}
+
+					if ( $is_login_page_access || $is_login_page_referer ) {
+						// 3. リファラーヘッダーを除外
+						if ( ! isset( $modify_remove_variables['request_headers'] ) ) {
+							$modify_remove_variables['request_headers'] = array();
+						}
+						$modify_remove_variables['request_headers'][] = 'Referer';
+					}
+				}
+			}
+		}
+
 		return array(
 			'is_removed'              => $is_rule_removed,
 			'modify_remove_variables' => $modify_remove_variables,
+			'modify_variables'        => $modify_variables,
 		);
 	}
 
@@ -1053,6 +1096,14 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 				$waf_rule['remove_variables'] = array_merge_recursive(
 					$waf_rule['remove_variables'],
 					$remove_rule_result['modify_remove_variables']
+				);
+			}
+
+			// ルールのvariablesを動的に変更
+			if ( ! empty( $remove_rule_result['modify_variables'] ) ) {
+				$waf_rule['variables'] = array_diff(
+					$waf_rule['variables'],
+					$remove_rule_result['modify_variables']
 				);
 			}
 
