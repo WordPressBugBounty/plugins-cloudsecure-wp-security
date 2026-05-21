@@ -717,6 +717,11 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			$this->two_factor_authentication->send_update_notice();
 		}
 
+		if ( version_compare( $old_version, '1.4.10' ) < 0 ) {
+			$this->two_factor_authentication->migrate_2fa_setup_secret_transient_keys();
+			$this->two_factor_authentication->migrate_2fa_user_data();
+		}
+
 		$this->config->set( 'version', $now_version );
 		$this->config->save();
 	}

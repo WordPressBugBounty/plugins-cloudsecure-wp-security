@@ -97,7 +97,6 @@
 /* マニュアルページへのリンク */
 #cloudsecure-wp-security .title-block-link {
 	position: relative;
-	color: #2170b0;
 	text-decoration: underline !important;
 	font-size: 13px;
 	outline: 1;
@@ -662,18 +661,6 @@
  * ログイン履歴ページのパーツ
  */
 
-/* テーブルトップ */
-#cloudsecure-wp-security #login-log th.sortable a,
-#cloudsecure-wp-security #login-log th.sorted a {
-	color: #2170b0;
-}
-
-/* テーブルトップのアイコン */
-#cloudsecure-wp-security #login-log .sorting-indicator::before {
-	color: #2170b0;
-	text-decoration-color: #2170b0;
-}
-
 /* 絞り込みのセレクトボックス */
 #cloudsecure-wp-security #login-log .tablenav .login-log-row select {
 	margin-right: 24px;
@@ -1009,9 +996,8 @@
 #cloudsecure-wp-security .link-button a {
 	display: inline-block;
 	background-color: #fff;
-	border: solid 1px #2170B0;
+	border: solid 1px;
 	border-radius: 3px;
-	color: #2170b0;
 	font-size: 14px;
 	font-weight: 400;
 	text-decoration: none;
@@ -1073,6 +1059,14 @@
 		position: static;
 	}
 }
+/* 新しいキーを生成リンク */
+#two-fa-setting-area #regenerate-key {
+	text-decoration: none;
+}
+#two-fa-setting-area #regenerate-key .regenerate-key-text {
+	text-decoration: underline;
+}
+
 /* 以下 2段階認証の認証方法設定ページのスタイル */
 /* ボタン関連 */
 #two-fa-setting-area .button {
@@ -1304,7 +1298,6 @@
 }
 #two-fa-setting-area .resend-email-code-active {
 	pointer-events: auto;
-	color: #2271b1;
 	cursor: pointer;
 }
 #two-fa-setting-area .resend-email-code-inactive {

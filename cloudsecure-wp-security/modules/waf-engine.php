@@ -814,6 +814,21 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			}
 		}
 
+		if ( isset( $remove_rules['rest_api_search'] ) ) {
+			$rest_endpoint = $this->get_rest_endpoint( $request_items );
+
+			// pages または posts エンドポイントで context=edit かつ search パラメータが存在する場合は search の値を除外
+			if ( preg_match( '/wp\/v2\/(pages|posts)/', $rest_endpoint ) === 1 ) {
+				if ( in_array( $rule_id, $remove_rules['rest_api_search'], true ) ) {
+					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
+						if ( ( $request_items['args']['context'] ?? '' ) === 'edit' && isset( $request_items['args']['search'] ) ) {
+							$modify_remove_variables['args'] = array( 'search' );
+						}
+					}
+				}
+			}
+		}
+
 		// cocoonテーマでの除外処理（theme-func-text, theme-settings, theme-ranking, theme-affiliate-tag）
 		if ( isset( $remove_rules['cocoon'] ) ) {
 			$referer = $_SERVER['HTTP_REFERER'] ?? '';

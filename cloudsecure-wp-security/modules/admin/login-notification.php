@@ -39,7 +39,7 @@ class CloudSecureWP_Admin_Login_Notification extends CloudSecureWP_Admin_Common 
 						break;
 
 					case 'login_notification_subject':
-						$tmp = stripslashes( sanitize_textarea_field( $_POST[ $key ] ?? '' ) );
+						$tmp = sanitize_text_field( wp_unslash( $_POST[ $key ] ?? '' ) );
 						if ( ! $tmp ) {
 							$this->errors[] = '件名を入力してください';
 						}
@@ -47,7 +47,7 @@ class CloudSecureWP_Admin_Login_Notification extends CloudSecureWP_Admin_Common 
 						break;
 
 					case 'login_notification_body':
-						$tmp = stripslashes( sanitize_textarea_field( $_POST[ $key ] ?? '' ) );
+						$tmp = sanitize_textarea_field( wp_unslash( $_POST[ $key ] ?? '' ) );
 						if ( ! $tmp ) {
 							$this->errors[] = '本文を入力してください';
 						}

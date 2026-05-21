@@ -240,7 +240,7 @@ class CloudSecureWP_Admin_Two_Factor_Authentication_Registration extends CloudSe
 				<div class="setup-key-section">
 					<div class="generate-key-section" style="text-align: left;">
 						<p class="modal-text">セットアップキー：<span id="setup_key_display"></span></p>
-						<p class="modal-text" style="color: #2271b1;"><span class="dashicons dashicons-update"></span><a href="#" id="regenerate-key">新しいキーを生成</a></p>
+						<p class="modal-text"><a href="#" id="regenerate-key"><span class="dashicons dashicons-update"></span><span class="regenerate-key-text">新しいキーを生成</span></a></p>
 					</div>
 					<div class="input-code-section">
 						<label for="verification-code">認証コード（6桁）</label>

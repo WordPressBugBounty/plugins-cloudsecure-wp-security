@@ -44,30 +44,35 @@ class CloudSecureWP_Time_Based_One_Time_Password {
 	}
 
 	/**
-	 * コードが正しいかどうかを検証
+	 * コードが正しいかどうかを検証し、一致した time_slice を返す
 	 * 前後1つ分の時間スライスを許容
 	 *
 	 * @param string $secret
 	 * @param string $code
-	 * @param int    $time_step 時間間隔（秒）デフォルトは30秒
+	 * @param int    $time_step 時間間隔（秒）
 	 *
-	 * @return bool
+	 * @return int|false 一致した time_slice、不一致の場合は false
 	 */
-	public static function verify_code( string $secret, string $code, int $time_step ): bool {
-		$current_time_slice = floor( time() / $time_step );
+	public static function verify_code( string $secret, string $code, int $time_step ) {
+		$current_time_slice = (int) floor( time() / $time_step );
 
 		if ( strlen( $code ) !== 6 ) {
 			return false;
 		}
 
+		$matched_slice = false;
 		for ( $i = - self::$discrepancy; $i <= self::$discrepancy; ++$i ) {
 			$calculated_code = self::get_code( $secret, $current_time_slice + $i );
 			if ( self::timing_safe_equals( $calculated_code, $code ) ) {
-				return true;
+				$candidate = $current_time_slice + $i;
+				// 衝突時に最小スライスが返ることによるリプレイ誤拒否を防ぐため最大値を採用
+				if ( $matched_slice === false || $candidate > $matched_slice ) {
+					$matched_slice = $candidate;
+				}
 			}
 		}
 
-		return false;
+		return $matched_slice;
 	}
 
 	/**
@@ -157,7 +162,7 @@ class CloudSecureWP_Time_Based_One_Time_Password {
 	public static function create_code_for_email( string $secret, int $time_step ): string {
 
 		// 現在の時間スライスを計算
-		$time_slice = floor( time() / $time_step );
+		$time_slice = (int) floor( time() / $time_step );
 
 		// コードを生成
 		return self::get_code( $secret, $time_slice );
@@ -213,7 +218,7 @@ class CloudSecureWP_Time_Based_One_Time_Password {
 	 */
 	public static function generate_secret_key(): array {
 		// ランダムなバイナリデータを生成
-		$binary = random_bytes( 10 );
+		$binary = random_bytes( 20 );
 
 		// 16進数に変換
 		$hex = bin2hex( $binary );

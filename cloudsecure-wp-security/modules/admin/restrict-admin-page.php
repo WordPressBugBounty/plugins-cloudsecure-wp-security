@@ -39,7 +39,7 @@ class CloudSecureWP_Admin_Restrict_Admin_Page extends CloudSecureWP_Admin_Common
 						break;
 
 					case 'restrict_admin_page_paths':
-						$tmp                 = stripslashes( sanitize_textarea_field( $_POST[ $key ] ?? '' ) );
+						$tmp                 = sanitize_textarea_field( wp_unslash( $_POST[ $key ] ?? '' ) );
 						$this->datas[ $key ] = $this->restrict_admin_page->text2array( $tmp );
 						break;
 				}

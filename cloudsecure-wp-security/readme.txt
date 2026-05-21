@@ -2,8 +2,8 @@
 Contributors: cloudsecure
 Tags: security, login lock, brute force, anti-spam, waf
 Requires at least: 5.3.15
-Tested up to: 6.9
-Stable tag: 1.4.9
+Tested up to: 7.0
+Stable tag: 1.4.10
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -105,6 +105,11 @@ WordPress、プラグイン、テーマの更新が必要になったとき、Wo
 [CloudSecure WP Security FAQ](https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security/faq.php)
 
 == Changelog ==
+
+= 1.4.10 =
+* WordPress7.0をサポート
+* 2段階認証で使用する認証コードのセキュリティ強化
+* 軽微な修正
 
 = 1.4.9 =
 * 2段階認証機能の Cloudflare Turnstile 対応

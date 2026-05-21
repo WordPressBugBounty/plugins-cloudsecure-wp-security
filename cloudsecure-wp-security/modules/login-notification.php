@@ -147,6 +147,7 @@ class CloudSecureWP_Login_Notification extends CloudSecureWP_Common {
 
 		$mail    = $user->get( 'user_email' );
 		$subject = $this->bind_values( $this->config->get( self::KEY_SUBJECT ), $values );
+		$subject = preg_replace( '/[\r\n]/', '', $subject );
 		$body    = $this->bind_values( $this->config->get( self::KEY_BODY ), $values );
 
 		$this->wp_send_mail( $mail, esc_html( $subject ), esc_html( $body ) );

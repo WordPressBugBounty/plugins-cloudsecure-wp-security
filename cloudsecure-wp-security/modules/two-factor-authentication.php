@@ -20,15 +20,18 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		12 => 900, // 12回で15分間
 	);
 	private const LATE_LIMIT_TIME_MAX      = 1200; // 最大20分間
+	private const REPLAY_LOCK_TIMEOUT      = 2;
+	private const SETUP_SECRET_PREFIX      = 'cloudsecurewp_2fa_setup_secret_';
+	private const SETUP_SECRET_TIMEOUT     = 180;
 	public const USER_AUTH_METHOD_NONE     = 0;
 	public const USER_AUTH_METHOD_APP      = 1;
 	public const USER_AUTH_METHOD_EMAIL    = 2;
 	public const USER_AUTH_METHOD_RECOVERY = 3;
 	public const AUTH_APP_INTERVAL         = 30;
 	public const AUTH_EMAIL_INTERVAL       = 60;
-	public const TWO_FACTOR_SECRET_KEY     = 'wp_cloudsecurewp_two_factor_authentication_secret';
 	public const TWO_FACTOR_EMAIL_SEND     = 'wp_cloudsecurewp_two_factor_authentication_email_send';
 	public const EMAIL_SEND_LIMIT_TIME     = 30;
+	public const TWO_FACTOR_LAST_SUCCESS   = 'wp_cloudsecurewp_two_factor_authentication_last_success';
 
 	private $config;
 
@@ -657,6 +660,106 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	}
 
 	/**
+	 * 最後に認証成功した time_slice を取得
+	 * 未設定（初回ログイン）の場合は false を返す
+	 *
+	 * @param int $user_id
+	 *
+	 * @return int|false
+	 */
+	private function get_last_success_slice( int $user_id ) {
+		$value = get_user_meta( $user_id, self::TWO_FACTOR_LAST_SUCCESS, true );
+		if ( $value === '' || $value === false || $value === null ) {
+			return false;
+		}
+		$int_value = absint( $value );
+
+		if ( $int_value === 0 ) {
+			return false;
+		}
+		return $int_value;
+	}
+
+	/**
+	 * 最後に認証成功した time_slice を保存
+	 *
+	 * @param int $user_id
+	 * @param int $time_slice
+	 *
+	 * @return bool 保存成功時 true、DB書き込み失敗時 false
+	 */
+	private function update_last_success_slice( int $user_id, int $time_slice ): bool {
+		$result = update_user_meta( $user_id, self::TWO_FACTOR_LAST_SUCCESS, $time_slice );
+		return $result !== false;
+	}
+
+	/**
+	 * TOTP/メール OTP のリプレイ防止付き検証
+	 *
+	 * @param int    $user_id
+	 * @param string $code
+	 * @param int    $auth_method
+	 *
+	 * @return bool true: 検証成功、false: 検証失敗
+	 */
+	private function verify_totp_with_replay_protection( int $user_id, string $code, int $auth_method ): bool {
+		global $wpdb;
+
+		// シークレットキーを取得
+		$auth_info = $this->get_2fa_auth_info( $user_id );
+		if ( ! $auth_info || ! isset( $auth_info['secret'] ) ) {
+			return false;
+		}
+		$secret_key = $auth_info['secret'];
+
+		$time_step = ( $auth_method === self::USER_AUTH_METHOD_EMAIL ) ? self::AUTH_EMAIL_INTERVAL : self::AUTH_APP_INTERVAL;
+
+		// コード認証
+		$matched_slice = CloudSecureWP_Time_Based_One_Time_Password::verify_code( $secret_key, $code, $time_step );
+
+		if ( $matched_slice === false ) {
+			// 認証失敗
+			return false;
+		}
+
+		// 使用済みコードの確認
+		$lock_name = 'cloudsecurewp_2fa_verify' . $user_id;
+
+		// ロックを取得
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$acquired = $wpdb->get_var(
+			$wpdb->prepare( 'SELECT GET_LOCK(%s, %d)', $lock_name, self::REPLAY_LOCK_TIMEOUT )
+		);
+
+		if ( $acquired !== '1' ) {
+			// ロック取得失敗：認証を失敗とみなす（リプレイ攻撃の可能性）
+			return false;
+		}
+
+		try {
+			$last_slice = $this->get_last_success_slice( $user_id );
+
+			if ( $last_slice !== false && $matched_slice <= $last_slice ) {
+				// 使用済みコード：認証失敗
+				return false;
+			}
+
+			// 最終成功スライスを更新（失敗時はリプレイ防止が機能しないため認証失敗とする）
+			if ( ! $this->update_last_success_slice( $user_id, $matched_slice ) ) {
+				return false;
+			}
+			return true;
+
+		} finally {
+			// ロック解放
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->query(
+				$wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name )
+			);
+		}
+	}
+
+	/**
 	 * 2段階認証コード検証処理
 	 *
 	 * @param int    $user_id
@@ -666,25 +769,13 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 * @return bool
 	 */
 	private function verify_2fa_code( int $user_id, string $code, int $auth_method ): bool {
-		// リカバリーコードでの認証の場合
+		// リカバリーコードでの認証の場合（time_slice 管理対象外）
 		if ( $auth_method === self::USER_AUTH_METHOD_RECOVERY ) {
 			return CloudSecureWP_Recovery_Codes::verify_code( $user_id, $code );
 		}
 
-		// シークレットキーを取得
-		$auth_info = $this->get_2fa_auth_info( $user_id );
-		if ( ! $auth_info || ! isset( $auth_info['secret'] ) ) {
-			return false;
-		}
-		$secret_key = $auth_info['secret'];
-
-		// メール認証の場合（60秒間隔）
-		if ( $auth_method === self::USER_AUTH_METHOD_EMAIL ) {
-			return CloudSecureWP_Time_Based_One_Time_Password::verify_code( $secret_key, $code, self::AUTH_EMAIL_INTERVAL );
-		}
-
-		// アプリ認証の場合（30秒間隔）
-		return CloudSecureWP_Time_Based_One_Time_Password::verify_code( $secret_key, $code, self::AUTH_APP_INTERVAL );
+		// メール認証・アプリ認証の場合
+		return $this->verify_totp_with_replay_protection( $user_id, $code, $auth_method );
 	}
 
 	// =========================================================================
@@ -1441,15 +1532,39 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 * @return void
 	 */
 	public function setting_2fa_auth_info( int $user_id, int $method, string $secret ): void {
+		global $wpdb;
+
 		// 認証情報取得
 		$auth_info = $this->get_2fa_auth_info( $user_id );
 
-		if ( ! empty( $auth_info ) ) {
-			// 既に登録されている場合は更新
-			$this->update_2fa_auth_method( $user_id, $method, $secret );
-		} else {
-			// 登録されていない場合は新規登録
-			$this->insert_2fa_auth_method( $user_id, $method, $secret );
+		// トランザクション開始
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$wpdb->query( 'START TRANSACTION' );
+
+		try {
+			if ( ! empty( $auth_info ) ) {
+				// 既に登録されている場合は更新
+				$this->update_2fa_auth_method( $user_id, $method, $secret );
+			} else {
+				// 登録されていない場合は新規登録
+				$this->insert_2fa_auth_method( $user_id, $method, $secret );
+			}
+
+			// リプレイ防止マーカーをリセット
+			delete_user_meta( $user_id, self::TWO_FACTOR_LAST_SUCCESS );
+			if ( ! empty( $wpdb->last_error ) ) {
+				throw new Exception( 'Failed to reset last success slice.' );
+			}
+
+			// トランザクションコミット
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->query( 'COMMIT' );
+
+		} catch ( Exception $e ) {
+			// エラー発生時はロールバック
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->query( 'ROLLBACK' );
+			throw $e;
 		}
 	}
 
@@ -1690,6 +1805,8 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	private function fetch_user_metas( int $last_umeta_id, int $batch_size ): array {
 		global $wpdb;
 
+		$secret_key = $wpdb->get_blog_prefix() . 'cloudsecurewp_two_factor_authentication_secret';
+
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 		$user_metas = $wpdb->get_results(
 			$wpdb->prepare(
@@ -1699,7 +1816,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 					AND umeta_id > %d
 				ORDER BY umeta_id ASC 
 				LIMIT %d",
-				self::TWO_FACTOR_SECRET_KEY,
+				$secret_key,
 				$last_umeta_id,
 				$batch_size
 			),
@@ -1707,6 +1824,45 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		);
 
 		return $user_metas ?? array();
+	}
+
+	/**
+	 * authテーブルに既に存在するuser_idを事前確認し、usermetaを「既存」「新規」に分類して返す
+	 *
+	 * @param array $user_metas
+	 *
+	 * @return array ['existing_umeta_ids' => array, 'new_user_metas' => array]
+	 */
+	private function split_user_metas_by_auth_existence( array $user_metas ): array {
+		global $wpdb;
+
+		$all_user_ids     = array_column( $user_metas, 'user_id' );
+		$placeholders_pre = implode( ', ', array_fill( 0, count( $all_user_ids ), '%d' ) );
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$existing_user_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT user_id FROM {$wpdb->prefix}" . self::AUTH_TABLE_NAME . " WHERE user_id IN ($placeholders_pre)",
+				$all_user_ids
+			)
+		);
+		$existing_user_ids = array_map( 'intval', $existing_user_ids );
+
+		$existing_umeta_ids = array();
+		$new_user_metas     = array();
+
+		foreach ( $user_metas as $user_meta ) {
+			if ( in_array( (int) $user_meta['user_id'], $existing_user_ids, true ) ) {
+				$existing_umeta_ids[] = (int) $user_meta['umeta_id'];
+			} else {
+				$new_user_metas[] = $user_meta;
+			}
+		}
+
+		return array(
+			'existing_umeta_ids' => $existing_umeta_ids,
+			'new_user_metas'     => $new_user_metas,
+		);
 	}
 
 	/**
@@ -1727,6 +1883,11 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 
 			// Base32デコードしてバイナリに変換
 			$binary_secret = CloudSecureWP_Time_Based_One_Time_Password::base32_decode( $meta_value );
+
+			// デコード失敗または空の場合はスキップ
+			if ( ! $binary_secret ) {
+				continue;
+			}
 
 			// バイナリデータを16進数に変換
 			$hex_secret = bin2hex( $binary_secret );
@@ -1877,28 +2038,29 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 				// 最後に取得したumeta_idを更新
 				$last_umeta_id = end( $user_metas )['umeta_id'];
 
-				// バルクインサート用のデータを準備
-				$conversion_result = $this->convert_user_metas_to_insert_data( $user_metas );
+				// authテーブルに既存のuser_idを確認し、既存/新規に分類
+				$split_result       = $this->split_user_metas_by_auth_existence( $user_metas );
+				$existing_umeta_ids = $split_result['existing_umeta_ids'];
+				$new_user_metas     = $split_result['new_user_metas'];
+
+				// 新規ユーザーのみバルクインサート用データに変換
+				$conversion_result = $this->convert_user_metas_to_insert_data( $new_user_metas );
 				$insert_data       = $conversion_result['insert_data'];
 				$umeta_ids_map     = $conversion_result['umeta_ids_map'];
-
-				// 登録するデータがない場合は次のバッチへ
-				if ( empty( $insert_data ) ) {
-					continue;
-				}
 
 				// トランザクション開始
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 				$wpdb->query( 'START TRANSACTION' );
 
-				// バルクインサート実行（失敗したuser_idのリストを取得）
-				$failed_user_ids = $this->bulk_insert_2fa_auth( $insert_data );
+				// 新規ユーザーのみINSERT
+				$failed_user_ids = array();
+				if ( ! empty( $insert_data ) ) {
+					$failed_user_ids = $this->bulk_insert_2fa_auth( $insert_data );
+				}
 
-				// 成功したuser_idを特定
-				$target_user_ids     = array_column( $insert_data, 'user_id' );
-				$successful_user_ids = array_diff( $target_user_ids, $failed_user_ids );
-
-				// 成功したレコードのumeta_idを取得
+				// INSERT成功したuser_idのumeta_idを取得
+				$target_user_ids      = array_column( $insert_data, 'user_id' );
+				$successful_user_ids  = array_diff( $target_user_ids, $failed_user_ids );
 				$successful_umeta_ids = array();
 				foreach ( $successful_user_ids as $user_id ) {
 					if ( isset( $umeta_ids_map[ $user_id ] ) ) {
@@ -1906,8 +2068,9 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 					}
 				}
 
-				// 成功したレコードのみwp_usermetaから削除
-				$this->delete_user_metas( $successful_umeta_ids );
+				// 既存ユーザー + INSERT成功ユーザーのusermetaを削除
+				$delete_umeta_ids = array_merge( $existing_umeta_ids, $successful_umeta_ids );
+				$this->delete_user_metas( $delete_umeta_ids );
 
 				// トランザクションコミット
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
@@ -2138,28 +2301,33 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		}
 
 		// wp_usermetaからシークレットキーを取得
-		$secret = get_user_meta( $user_id, self::TWO_FACTOR_SECRET_KEY, true );
+		$secret_key = $wpdb->get_blog_prefix() . 'cloudsecurewp_two_factor_authentication_secret';
+		$secret     = get_user_meta( $user_id, $secret_key, true );
 		if ( ! $secret ) {
 			// シークレットキーが存在しない場合は何もしない
 			return [];
 		}
+
+		// Base32デコードしてバイナリに変換（トランザクション前に検証）
+		$binary_secret = CloudSecureWP_Time_Based_One_Time_Password::base32_decode( $secret );
+		if ( ! $binary_secret ) {
+			// デコード失敗の場合は処理しない
+			return [];
+		}
+
+		// バイナリデータを16進数に変換
+		$hex_secret = bin2hex( $binary_secret );
 
 		try {
 			// トランザクション開始
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 			$wpdb->query( 'START TRANSACTION' );
 
-			// 登録データ作成
-			// Base32デコードしてバイナリに変換
-			$binary_secret = CloudSecureWP_Time_Based_One_Time_Password::base32_decode( $secret );
-			// バイナリデータを16進数に変換
-			$hex_secret = bin2hex( $binary_secret );
-
 			// 2fa認証情報を登録
 			$this->insert_2fa_auth_method( $user_id, self::USER_AUTH_METHOD_APP, $hex_secret );
 
 			// シークレットキーをwp_usermetaから削除
-			$result = delete_user_meta( $user_id, self::TWO_FACTOR_SECRET_KEY );
+			$result = delete_user_meta( $user_id, $secret_key );
 			if ( ! $result || ! empty( $wpdb->last_error ) ) {
 				throw new Exception( 'Failed to delete secret key from user meta.' );
 			}
@@ -2251,8 +2419,8 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			$this->update_email_able_send_time( $user_id );
 
 			// 秘密鍵を保存
-			$transient_key = '2fa_setup_secret_' . $user_id;
-			set_transient( $transient_key, $secret_key_data['hex'], 180 );
+			$transient_key = self::SETUP_SECRET_PREFIX . $user_id;
+			set_transient( $transient_key, $secret_key_data['hex'], self::SETUP_SECRET_TIMEOUT );
 
 			$json_response['is_send_email']     = true;
 			$json_response['remaining_seconds'] = self::EMAIL_SEND_LIMIT_TIME;
@@ -2293,7 +2461,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		if ( $method === 'app' ) {
 			$secret_key = isset( $_POST['secret_key'] ) ? sanitize_text_field( $_POST['secret_key'] ) : '';
 		} else {
-			$transient_key = '2fa_setup_secret_' . $user_id;
+			$transient_key = self::SETUP_SECRET_PREFIX . $user_id;
 			$secret_key    = get_transient( $transient_key );
 			if ( ! $secret_key ) {
 				wp_send_json_error( $json_response );
@@ -2301,7 +2469,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			}
 		}
 
-		if ( ! CloudSecureWP_Time_Based_One_Time_Password::verify_code( $secret_key, $code, $interval ) ) {
+		if ( CloudSecureWP_Time_Based_One_Time_Password::verify_code( $secret_key, $code, $interval ) === false ) {
 			wp_send_json_error( $json_response );
 			return;
 		}
@@ -2582,5 +2750,64 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			return new WP_Error( 'xmlrpc_login_denied', 'XML-RPC経由のログインは許可されていません。' );
 		}
 		return $user;
+	}
+
+	/**
+	 * 旧トランジェントキー（2fa_setup_secret_）を新キー（cloudsecurewp_2fa_setup_secret_）に移行
+	 *
+	 * @return void
+	 */
+	public function migrate_2fa_setup_secret_transient_keys(): void {
+		global $wpdb;
+
+		// 期限切れの旧トランジェント（値＋タイムアウト）を一括削除
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE a, b FROM {$wpdb->options} a, {$wpdb->options} b
+				WHERE a.option_name LIKE %s
+				AND b.option_name = CONCAT( '_transient_timeout_', SUBSTRING( a.option_name, 12 ) )
+				AND b.option_value < %d",
+				$wpdb->esc_like( '_transient_2fa_setup_secret_' ) . '%',
+				time()
+			)
+		);
+
+		// 残った有効期限内レコードをタイムアウトレコード起点で取得
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$active_records = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT option_name, option_value AS timeout_value
+				FROM {$wpdb->options}
+				WHERE option_name LIKE %s
+				AND option_value <= %d",
+				$wpdb->esc_like( '_transient_timeout_2fa_setup_secret_' ) . '%',
+				time() + self::SETUP_SECRET_TIMEOUT
+			)
+		);
+
+		if ( empty( $active_records ) ) {
+			return;
+		}
+
+		// 有効期限内のレコードのキーを移行
+		foreach ( $active_records as $record ) {
+			$old_key = substr( $record->option_name, strlen( '_transient_timeout_' ) );
+
+			$data = get_transient( $old_key );
+			if ( false === $data ) {
+				continue;
+			}
+
+			// 残り有効期限（秒）を（最低1秒を保証して無期限トランジェントの作成を防ぐ）
+			$expiration = max( 1, (int) $record->timeout_value - time() );
+
+			$user_id = substr( $old_key, strlen( '2fa_setup_secret_' ) );
+
+			// 新キーで保存し旧キーを削除（WP関数が値・タイムアウトのペアを保証）
+			set_transient( self::SETUP_SECRET_PREFIX . $user_id, $data, $expiration );
+
+			delete_transient( $old_key );
+		}
 	}
 }

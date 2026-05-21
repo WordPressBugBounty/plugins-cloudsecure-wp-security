@@ -41,7 +41,7 @@ class CloudSecureWP_Admin_Disable_RESTAPI extends CloudSecureWP_Admin_Common {
 						break;
 
 					case 'disable_rest_api_exclude':
-						$tmp                 = stripslashes( sanitize_textarea_field( $_POST[ $key ] ?? '' ) );
+						$tmp                 = sanitize_textarea_field( wp_unslash( $_POST[ $key ] ?? '' ) );
 						$this->datas[ $key ] = $this->disable_restapi->text2array( $tmp );
 						break;
 				}

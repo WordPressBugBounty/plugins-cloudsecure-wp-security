@@ -92,7 +92,7 @@ class CloudSecureWP_Restrict_Admin_Page extends CloudSecureWP_Common {
 	private function get_htaccess_settings( array $allow_ips, array $allow_paths ): string {
 		$rules = '';
 		foreach ( $allow_paths as $path ) {
-			$rules .= '    RewriteRule ^wp-admin/' . str_replace( '.', '\.', $path ) . " - [L]\n";
+			$rules .= '    RewriteRule ^wp-admin/' . preg_quote( $path ) . " - [L]\n";
 		}
 
 		$conds = '';

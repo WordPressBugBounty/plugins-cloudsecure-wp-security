@@ -600,7 +600,7 @@ abstract class CloudSecureWP_CLI_Base extends WP_CLI_Command {
 
 		// テキストエリア設定の場合（bodyのみ）
 		if ( $this->is_textarea_setting( $feature_name, $setting_key ) ) {
-			return stripslashes( sanitize_textarea_field( $value ) );
+			return sanitize_textarea_field( wp_unslash( $value ) );
 		}
 
 		// 配列設定やビットフラグ設定も含め、その他の設定は通常のテキストフィールドとして処理

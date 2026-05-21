@@ -224,7 +224,7 @@ class CloudSecureWP_Server_Error_Notification extends CloudSecureWP_Common {
 
 				$admins = $this->get_admin_users();
 				foreach ( $admins as $admin ) {
-					$this->wp_send_mail( $admin->user_email, esc_html( 'サーバーエラー通知' ), $this->get_body( $error ) );
+					$this->wp_send_mail( $admin->user_email, esc_html( 'サーバーエラー通知' ), esc_html( $this->get_body( $error ) ) );
 				}
 			}
 		}
