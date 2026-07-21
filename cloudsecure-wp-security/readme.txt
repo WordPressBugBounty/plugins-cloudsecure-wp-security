@@ -3,7 +3,7 @@ Contributors: cloudsecure
 Tags: security, login lock, brute force, anti-spam, waf
 Requires at least: 5.3.15
 Tested up to: 7.0
-Stable tag: 1.4.10
+Stable tag: 1.4.11
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -105,6 +105,9 @@ WordPress、プラグイン、テーマの更新が必要になったとき、Wo
 [CloudSecure WP Security FAQ](https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security/faq.php)
 
 == Changelog ==
+
+= 1.4.11 =
+* CVE-2026-63030（通称：wp2shell）の脆弱性対応としてREST APIのバッチエンドポイント（/wp-json/batch/v1）への通信を遮断
 
 = 1.4.10 =
 * WordPress7.0をサポート

@@ -15,6 +15,7 @@ require_once __DIR__ . '/restrict-admin-page.php';
 require_once __DIR__ . '/disable-xmlrpc.php';
 require_once __DIR__ . '/disable-author-query.php';
 require_once __DIR__ . '/disable-restapi.php';
+require_once __DIR__ . '/protect-rest-batch.php';
 require_once __DIR__ . '/update-notice.php';
 require_once __DIR__ . '/captcha.php';
 require_once __DIR__ . '/../really-simple-captcha/really-simple-captcha.php';
@@ -40,6 +41,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 	private $disable_xmlrpc;
 	private $disable_author_query;
 	private $disable_restapi;
+	private $protect_rest_batch;
 	private $update_notice;
 	private $captcha;
 	private $login_log;
@@ -60,6 +62,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 		$this->disable_xmlrpc             = new CloudSecureWP_Disable_XMLRPC( $info, $this->config, $this->htaccess );
 		$this->disable_author_query       = new CloudSecureWP_Disable_Author_Query( $info, $this->config );
 		$this->disable_restapi            = new CloudSecureWP_Disable_RESTAPI( $info, $this->config );
+		$this->protect_rest_batch         = new CloudSecureWP_Protect_REST_Batch( $info );
 		$this->update_notice              = new CloudSecureWP_Update_Notice( $info, $this->config );
 		$this->captcha                    = new CloudSecureWP_CAPTCHA( $info, $this->config );
 		$this->login_log                  = new CloudSecureWP_Login_Log( $info, $this->config, $this->disable_login );
@@ -223,6 +226,9 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			if ( $this->disable_author_query->is_enabled() ) {
 				add_action( 'init', array( $this->disable_author_query, 'init' ) );
 			}
+
+			// wp2shell（CVE-2026-63030）緩和パッチ: 未認証の /batch/v1 アクセスを常時拒否（設定なし・優先度1で類似機能より先に評価）
+			add_filter( 'rest_pre_dispatch', array( $this->protect_rest_batch, 'rest_pre_dispatch' ), 1, 3 );
 
 			if ( $this->disable_restapi->is_enabled() ) {
 				add_filter( 'rest_pre_dispatch', array( $this->disable_restapi, 'rest_pre_dispatch' ), 10, 3 );
