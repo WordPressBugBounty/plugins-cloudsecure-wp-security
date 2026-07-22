@@ -128,24 +128,9 @@ class CloudSecureWP_Login_Log extends CloudSecureWP_Common {
 	 */
 	public function wp_login( $user_login ) {
 
-		global $wpdb;
 		$ip = $this->get_client_ip();
 
-		$this->disable_login->remove_expired_login();
-
-		$data = array(
-			'ip'           => $ip,
-			'status'       => $this->disable_login->get_status_success(),
-			'failed_count' => 0,
-			'login_at'     => current_time( 'mysql' ),
-		);
-
-		$row = $this->disable_login->get_row_by_ip( $ip );
-		if ( empty( $row ) ) {
-			$wpdb->insert( $this->disable_login->get_table_name(), $data );
-		} else {
-			$wpdb->update( $this->disable_login->get_table_name(), $data, array( 'ip' => $ip ) );
-		}
+		$this->disable_login->reset_on_success( $ip );
 
 		$this->write_log( $user_login, $ip, self::LOGIN_STATUS_SUCCESS, self::METHOD_PAGE );
 	}
@@ -162,6 +147,9 @@ class CloudSecureWP_Login_Log extends CloudSecureWP_Common {
 
 		$user_login = $user->user_login;
 		$ip         = $this->get_client_ip();
+
+		$this->disable_login->reset_on_success( $ip );
+
 		$this->write_log( $user_login, $ip, self::LOGIN_STATUS_SUCCESS, self::METHOD_XMLRPC );
 	}
 

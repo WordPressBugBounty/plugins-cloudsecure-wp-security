@@ -5,20 +5,39 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
-	protected const VARIABLE_ARGS                  = 'args';
-	protected const VARIABLE_ARGS_NAMES            = 'args_names';
+	protected const VARIABLE_ARGS_GET              = 'args_get';
+	protected const VARIABLE_ARGS_GET_NAMES        = 'args_get_names';
+	protected const VARIABLE_ARGS_POST             = 'args_post';
+	protected const VARIABLE_ARGS_POST_NAMES       = 'args_post_names';
 	protected const VARIABLE_REQUEST_COOKIES       = 'request_cookies';
 	protected const VARIABLE_REQUEST_COOKIES_NAMES = 'request_cookies_names';
 	protected const VARIABLE_REQUEST_HEADERS       = 'request_headers';
 	protected const VARIABLE_REQUEST_FILENAME      = 'request_filename';
 	protected const VARIABLE_XML                   = 'xml';
 	private $parsed_xml;
+	private $request_body            = null;
+	private $excluded_user_by_cookie = null;
 
 
 
 	function __construct( array $info ) {
 		parent::__construct( $info );
 
+	}
+
+
+	/**
+	 * リクエストボディ（php://input）を取得する
+	 * 同一リクエスト内でボディは不変のため、初回読み込み時にキャッシュして再読み込みを防ぐ
+	 *
+	 * @return string
+	 */
+	private function get_request_body(): string {
+		if ( null === $this->request_body ) {
+			$this->request_body = (string) file_get_contents( 'php://input' );
+		}
+
+		return $this->request_body;
 	}
 
 
@@ -38,7 +57,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	 * @return string
 	 */
 	public function xml_parser(): string {
-		$request_body     = file_get_contents( 'php://input' );
+		$request_body     = $this->get_request_body();
 		$this->parsed_xml = '';
 
 		if ( ! empty( $request_body ) ) {
@@ -59,34 +78,41 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 
 	/**
-	 * ARGS、ARGS_NAMES 用 クエリ文字列、POSTデータ取得
+	 * ARGS_GET、ARGS_GET_NAMES 用 GETデータ取得
 	 *
 	 * @return array
 	 */
-	public function get_request_args_data(): array {
-		$args = array();
-
+	public function get_request_args_get_data(): array {
 		if ( ! empty( $_GET ) ) {
-			$args = $_GET;
+			return $_GET;
 		}
 
+		return array();
+	}
+
+
+	/**
+	 * ARGS_POST、ARGS_POST_NAMES 用 POSTデータ取得
+	 *
+	 * @return array
+	 */
+	public function get_request_args_post_data(): array {
 		if ( ! empty( $_POST ) ) {
-			$args = array_merge( $args, $_POST );
+			return $_POST;
+		}
 
-		} else {
-			$post_data = file_get_contents( 'php://input' );
+		$post_data = $this->get_request_body();
 
-			if ( ! empty( $post_data ) ) {
-				$json_decoded_post_data = json_decode( $post_data, true );
+		if ( ! empty( $post_data ) ) {
+			$json_decoded_post_data = json_decode( $post_data, true );
 
-				// nullでなければjsonとなる
-				if ( is_array( $json_decoded_post_data ) ) {
-					$args = array_merge( $args, $json_decoded_post_data );
-				}
+			// nullでなければjsonとなる
+			if ( is_array( $json_decoded_post_data ) ) {
+				return $json_decoded_post_data;
 			}
 		}
 
-		return $args;
+		return array();
 	}
 
 
@@ -117,7 +143,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			self::VARIABLE_XML              => $this->xml_parser(),
 			self::VARIABLE_REQUEST_FILENAME => $this->get_request_uri(),
 			self::VARIABLE_REQUEST_HEADERS  => $this->get_http_request_headers(),
-			self::VARIABLE_ARGS             => $this->get_request_args_data(),
+			self::VARIABLE_ARGS_GET         => $this->get_request_args_get_data(),
+			self::VARIABLE_ARGS_POST        => $this->get_request_args_post_data(),
 			self::VARIABLE_REQUEST_COOKIES  => $this->get_request_cookies(),
 		);
 
@@ -440,11 +467,13 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	 */
 	public function check_request_item_array( $waf_rule, $request_items, $variable, $chain_items ) {
 		$results = array(
-			'is_matched'    => false,
-			'chain_items'   => array(),
-			'skip'          => 0,
-			'skipafter'     => '',
-			'match_results' => array(),
+			'is_matched'          => false,
+			'chain_items'         => array(),
+			'skip'                => 0,
+			'skipafter'           => '',
+			'match_results'       => array(),
+			'has_backtrack_error' => false,
+			'backtrack_key'       => '',
 		);
 
 		$get_request_item_variable = preg_replace( '/_names/', '', $variable );
@@ -460,7 +489,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			}
 
 			switch ( $variable ) {
-				case self::VARIABLE_ARGS:
+				case self::VARIABLE_ARGS_GET:
+				case self::VARIABLE_ARGS_POST:
 				case self::VARIABLE_REQUEST_COOKIES:
 				case self::VARIABLE_REQUEST_HEADERS:
 					if ( is_array( $val ) ) {
@@ -469,8 +499,18 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 						foreach ( $parsed_vals as $key => $val ) {
 							$checked_request_item = $this->check_request_item_value( $waf_rule, $key, $val, $variable );
 
+							if ( $checked_request_item['has_backtrack_error'] ) {
+								$results['has_backtrack_error'] = true;
+								$results['backtrack_key']       = $checked_request_item['backtrack_key'] ?? '';
+							}
+
 							if ( $checked_request_item['is_matched'] ) {
+								$has_bt  = $results['has_backtrack_error'];
+								$has_btk = $results['backtrack_key'];
 								$results = $this->get_rule_settings_and_results( $waf_rule, $request_items, $variable, $chain_items, $checked_request_item['match_string'] );
+
+								$results['has_backtrack_error'] = $has_bt;
+								$results['backtrack_key']       = $has_btk;
 								break;
 							}
 						}
@@ -480,14 +520,25 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 					break;
 
-				case self::VARIABLE_ARGS_NAMES:
+				case self::VARIABLE_ARGS_GET_NAMES:
+				case self::VARIABLE_ARGS_POST_NAMES:
 				case self::VARIABLE_REQUEST_COOKIES_NAMES:
 					$checked_request_item = $this->check_request_item_key( $waf_rule, $key, $variable );
 					break;
 			}
 
+			if ( isset( $checked_request_item['has_backtrack_error'] ) && $checked_request_item['has_backtrack_error'] ) {
+				$results['has_backtrack_error'] = true;
+				$results['backtrack_key']       = $checked_request_item['backtrack_key'] ?? '';
+			}
+
 			if ( $checked_request_item['is_matched'] ) {
+				$has_bt  = $results['has_backtrack_error'];
+				$has_btk = $results['backtrack_key'];
 				$results = $this->get_rule_settings_and_results( $waf_rule, $request_items, $variable, $chain_items, $checked_request_item['match_string'] );
+
+				$results['has_backtrack_error'] = $has_bt;
+				$results['backtrack_key']       = $has_btk;
 
 				break;
 			}
@@ -508,22 +559,36 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	 */
 	public function check_request_item_value( $waf_rule, $request_items_key, $request_items_value, $variable ): array {
 		$results = array(
-			'is_matched'   => false,
-			'match_string' => '',
+			'is_matched'          => false,
+			'match_string'        => '',
+			'has_backtrack_error' => false,
+			'backtrack_key'       => '',
 		);
 		$matches = array();
 
-		// リクエスト情報配列のkeyとvalueの変換
+		// リクエスト情報配列のkeyの変換
 		$tmp_key = $this->transform( $waf_rule['transformations'], $request_items_key );
+
+		// 除外対象のキーは検査自体を行わない
+		// preg_matchを先に実行するとバックトラック超過時に正常な操作が誤って遮断されるため、除外判定を検査前に行う
+		if ( true === $this->is_remove_variables( $waf_rule['remove_variables'], $variable, $tmp_key ) ) {
+			return $results;
+		}
+
+		// リクエスト情報配列のvalueの変換
 		$tmp_val = $this->transform( $waf_rule['transformations'], $request_items_value );
 
-		if ( preg_match( '/' . $waf_rule['regex_pattern'] . '/s', $tmp_val, $matches ) ) {
+		$preg_result = preg_match( '/' . $waf_rule['regex_pattern'] . '/s', $tmp_val, $matches );
+
+		if ( $preg_result === false ) {
+			// preg_matchが完走しなかった場合（バックトラック/JITスタック/再帰上限/不正UTF-8等）は検査失敗として扱う
+			$results['has_backtrack_error'] = true;
+			$results['backtrack_key']       = $request_items_key;
+		} elseif ( $preg_result === 1 ) {
 			if ( ! empty( $matches ) ) {
-				if ( false === $this->is_remove_variables( $waf_rule['remove_variables'], $variable, $tmp_key ) ) {
-					// 除外の設定が無ければマッチしたと判定
-					$results['is_matched']   = true;
-					$results['match_string'] = $matches[0];
-				}
+				// 除外判定は検査前に実施済みのためマッチしたと判定
+				$results['is_matched']   = true;
+				$results['match_string'] = $matches[0];
 			}
 		}
 
@@ -541,21 +606,33 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	 */
 	public function check_request_item_key( $waf_rule, $request_items_key, $variable ): array {
 		$results = array(
-			'is_matched'   => false,
-			'match_string' => '',
+			'is_matched'          => false,
+			'match_string'        => '',
+			'has_backtrack_error' => false,
+			'backtrack_key'       => '',
 		);
 		$matches = array();
 
 		// リクエスト情報配列のkeyの変換
 		$tmp_key = $this->transform( $waf_rule['transformations'], $request_items_key );
 
-		if ( preg_match( '/' . $waf_rule['regex_pattern'] . '/s', $tmp_key, $matches ) ) {
+		// 除外対象のキーは検査自体を行わない
+		// preg_matchを先に実行するとバックトラック超過時に正常な操作が誤って遮断されるため、除外判定を検査前に行う
+		if ( true === $this->is_remove_variables( $waf_rule['remove_variables'], $variable, $tmp_key ) ) {
+			return $results;
+		}
+
+		$preg_result = preg_match( '/' . $waf_rule['regex_pattern'] . '/s', $tmp_key, $matches );
+
+		if ( $preg_result === false ) {
+			// preg_matchが完走しなかった場合（バックトラック/JITスタック/再帰上限/不正UTF-8等）は検査失敗として扱う
+			$results['has_backtrack_error'] = true;
+			$results['backtrack_key']       = $request_items_key;
+		} elseif ( $preg_result === 1 ) {
 			if ( ! empty( $matches ) ) {
-				if ( false === $this->is_remove_variables( $waf_rule['remove_variables'], $variable, $tmp_key ) ) {
-					// 除外の設定が無ければマッチしたと判定
-					$results['is_matched']   = true;
-					$results['match_string'] = $matches[0];
-				}
+				// 除外判定は検査前に実施済みのためマッチしたと判定
+				$results['is_matched']   = true;
+				$results['match_string'] = $matches[0];
 			}
 		}
 
@@ -574,11 +651,12 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	 */
 	public function check_request_item_strings( $waf_rule, $request_items, $variable, $chain_items ): array {
 		$results = array(
-			'is_matched'    => false,
-			'chain_items'   => array(),
-			'skip'          => 0,
-			'skipafter'     => '',
-			'match_results' => array(),
+			'is_matched'          => false,
+			'chain_items'         => array(),
+			'skip'                => 0,
+			'skipafter'           => '',
+			'match_results'       => array(),
+			'has_backtrack_error' => false,
 		);
 
 		if ( empty( $request_items[ $variable ] ) ) {
@@ -602,7 +680,12 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			$request_items_urldecoded = urldecode( $request_items[ $variable ] );
 			$tmp_urldecoded           = $this->transform( $waf_rule['transformations'], $request_items_urldecoded );
 
-			if ( preg_match( '/' . $waf_rule['regex_pattern'] . '/s', $tmp_urldecoded, $matches ) ) {
+			$preg_result = preg_match( '/' . $waf_rule['regex_pattern'] . '/s', $tmp_urldecoded, $matches );
+
+			if ( $preg_result === false ) {
+				// preg_matchが完走しなかった場合（バックトラック/JITスタック/再帰上限/不正UTF-8等）は検査失敗として扱う
+				$results['has_backtrack_error'] = true;
+			} elseif ( $preg_result === 1 ) {
 				if ( ! empty( $matches ) ) {
 					$results = $this->get_rule_settings_and_results( $waf_rule, $request_items, $variable, $chain_items, $matches[0] );
 					return $results;
@@ -610,8 +693,11 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			}
 		}
 
-		if ( false === preg_match( '/' . $waf_rule['regex_pattern'] . '/s', $tmp_string, $matches ) ) {
-			// preg_matchが失敗したときは終了
+		$preg_result = preg_match( '/' . $waf_rule['regex_pattern'] . '/s', $tmp_string, $matches );
+
+		if ( $preg_result === false ) {
+			// preg_matchが完走しなかった場合（バックトラック/JITスタック/再帰上限/不正UTF-8等）は検査失敗として扱う
+			$results['has_backtrack_error'] = true;
 			return $results;
 		}
 
@@ -620,7 +706,10 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			return $results;
 		}
 
+		$has_bt  = $results['has_backtrack_error'];
 		$results = $this->get_rule_settings_and_results( $waf_rule, $request_items, $variable, $chain_items, $matches[0] );
+
+		$results['has_backtrack_error'] = $has_bt;
 
 	return $results;
 	}
@@ -634,12 +723,150 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	 */
 	public function get_rest_endpoint( $request_items ): string {
 		// パーマリンクが「基本」の場合はrest_routeパラメータにエンドポイントが含まれる
-		if ( isset( $request_items['args']['rest_route'] ) && is_string( $request_items['args']['rest_route'] ) ) {
-			return $request_items['args']['rest_route'];
+		// GETとPOSTの両方にrest_routeが含まれる場合は404エラーになる
+		if ( isset( $request_items['args_get']['rest_route'] ) && is_string( $request_items['args_get']['rest_route'] ) ) {
+			return $request_items['args_get']['rest_route'];
+		}
+		if ( isset( $request_items['args_post']['rest_route'] ) && is_string( $request_items['args_post']['rest_route'] ) ) {
+			return $request_items['args_post']['rest_route'];
 		}
 
 		// その他のパーマリンク設定の場合はrequest_filenameを使用
 		return $request_items['request_filename'];
+	}
+
+
+	/**
+	 * AND判定の共通ロジック
+	 *
+	 * 存在するチャネル（args_get / args_post）の値がすべて $predicate を満たし、かつ最低1つのチャネルに存在する場合のみ true。
+	 *
+	 * @param array    $request_items
+	 * @param string   $key
+	 * @param callable $predicate function( mixed $value ): bool  1チャネルの値が条件を満たすか
+	 * @return bool
+	 */
+	private function args_value_all_match( array $request_items, string $key, callable $predicate ): bool {
+		$args_get  = $request_items['args_get'] ?? array();
+		$args_post = $request_items['args_post'] ?? array();
+
+		$in_args_get  = array_key_exists( $key, $args_get );
+		$in_args_post = array_key_exists( $key, $args_post );
+
+		if ( ! $in_args_get && ! $in_args_post ) {
+			return false;
+		}
+		if ( $in_args_get && ! $predicate( $args_get[ $key ] ) ) {
+			return false;
+		}
+		if ( $in_args_post && ! $predicate( $args_post[ $key ] ) ) {
+			return false;
+		}
+
+		return true;
+	}
+
+
+	/**
+	 * 判定対象キーに対する値の完全一致判定（AND判定）
+	 * 許可する値が1つの場合
+	 *
+	 * 存在するチャネルの値がすべて $expected と厳密一致し、かつ最低1つのチャネルに存在する場合のみ true。
+	 *
+	 * @param array  $request_items
+	 * @param string $key
+	 * @param string $expected
+	 * @return bool
+	 */
+	private function args_value_matches( array $request_items, string $key, string $expected ): bool {
+		return $this->args_value_all_match(
+			$request_items,
+			$key,
+			static function ( $value ) use ( $expected ) {
+				return $value === $expected;
+			}
+		);
+	}
+
+
+	/**
+	 * 判定対象キーに対する値の完全一致判定（AND判定）
+	 * 許可する値が2つ以上の場合
+	 *
+	 * 存在するチャネルの値がすべて $allowed のいずれかと厳密一致し、かつ最低1つのチャネルに存在する場合のみ true。
+	 *
+	 * @param array    $request_items
+	 * @param string   $key
+	 * @param string[] $allowed
+	 * @return bool
+	 */
+	private function args_value_matches_any( array $request_items, string $key, array $allowed ): bool {
+		return $this->args_value_all_match(
+			$request_items,
+			$key,
+			static function ( $value ) use ( $allowed ) {
+				return in_array( $value, $allowed, true );
+			}
+		);
+	}
+
+
+	/**
+	 * 判定対象キーに対する値の正規表現一致判定（AND判定）
+	 *
+	 * 存在するチャネルの値がすべて $pattern に一致し、かつ最低1つに存在する場合のみ true。
+	 *
+	 * @param array  $request_items
+	 * @param string $key
+	 * @param string $pattern
+	 * @return bool
+	 */
+	private function args_value_matches_regex( array $request_items, string $key, string $pattern ): bool {
+		return $this->args_value_all_match(
+			$request_items,
+			$key,
+			static function ( $value ) use ( $pattern ) {
+				return is_string( $value ) && 1 === preg_match( $pattern, $value );
+			}
+		);
+	}
+
+
+	/**
+	 * 判定対象キーに対する値の部分一致判定（AND判定）
+	 *
+	 * 存在するチャネルの値がすべて $needle を含み、かつ最低1つに存在する場合のみ true。
+	 *
+	 * @param array  $request_items
+	 * @param string $key
+	 * @param string $needle
+	 * @return bool
+	 */
+	private function args_value_matches_partial( array $request_items, string $key, string $needle ): bool {
+		return $this->args_value_all_match(
+			$request_items,
+			$key,
+			static function ( $value ) use ( $needle ) {
+				return is_string( $value ) && false !== strpos( $value, $needle );
+			}
+		);
+	}
+
+
+	/**
+	 * 判定対象キーの存在判定（OR判定）
+	 *
+	 * どちらかのチャネルに存在すれば true
+	 *
+	 * @param array  $request_items
+	 * @param string $key
+	 * @return bool
+	 */
+	private function args_key_exists( array $request_items, string $key ): bool {
+		$args_get  = $request_items['args_get'] ?? array();
+		$args_post = $request_items['args_post'] ?? array();
+
+		return array_key_exists( $key, $args_get ) || array_key_exists( $key, $args_post );
 	}
 
 
@@ -673,32 +900,33 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 		}
 
 		if ( isset( $remove_rules['ajax_customize'] ) ) {
-			// カスタマイズ操作、オートセーブ時の除外
-			if ( preg_match( '/wp-admin\/customize\.php|customize_changeset_uuid/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
-				if ( in_array( $rule_id, $remove_rules['ajax_customize'], true ) ) {
-					if ( ( $request_items['args']['customize_autosaved'] ?? '' ) === 'on' || ( $request_items['args']['wp_customize'] ?? '' ) === 'on' ) {
-						$action = $request_items['args']['action'] ?? '';
-						if ( $action === 'update-widget' ) {
-							// actionがupdate-widgetの場合はルール全体を除外（cocoon）
-							$is_rule_removed = true;
-						} else {
-							// それ以外の場合はcustomized, customize_changeset_dataキーのみ除外
-							$modify_remove_variables['args'] = array( 'customized', 'customize_changeset_data' );
-						}
+			if ( in_array( $rule_id, $remove_rules['ajax_customize'], true ) ) {
+				// カスタマイズ操作、オートセーブ時の除外（issetで先に判定、最安価）
+				if (
+					$this->args_key_exists( $request_items, 'customize_changeset_uuid' ) &&
+					( $this->args_value_matches( $request_items, 'customize_autosaved', 'on' ) || $this->args_value_matches( $request_items, 'wp_customize', 'on' ) )
+				) {
+					$action = $request_items['args_post']['action'] ?? '';
+					if ( $action === 'update-widget' ) {
+						// actionがupdate-widgetの場合はルール全体を除外（cocoon）
+						$is_rule_removed = true;
+					} else {
+						// それ以外の場合はcustomized, customize_changeset_dataキーのみ除外
+						$modify_remove_variables['args_post'] = array( 'customized', 'customize_changeset_data' );
 					}
-				}
-			// ウィジェット保存時（cocoonテーマ）の除外
-			} elseif ( preg_match( '/wp-admin\/widgets\.php/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
-				if ( in_array( $rule_id, $remove_rules['ajax_customize'], true ) ) {
-					if ( ( $request_items['args']['action'] ?? '' ) === 'save-widget' ) {
+				// admin-ajax.phpへのリクエスト（ウィジェット保存・メニュー操作(WP5.3)をまとめて1回のpreg_matchで判定）
+				} elseif ( preg_match( '/wp-admin\/admin-ajax\.php/', $request_items['request_filename'] ) === 1 ) {
+					$action = $request_items['args_post']['action'] ?? '';
+					// ウィジェット保存時（cocoonテーマ）の除外
+					if ( $action === 'save-widget' && isset( $request_items['args_post']['widget-id'] ) ) {
+						$is_rule_removed = true;
+					// メニュー操作時（WordPress5.3）の除外
+					} elseif ( $action === 'add-menu-item' ) {
 						$is_rule_removed = true;
 					}
-				}
-			// メニュー操作時（cocoonテーマ）の除外
-			} elseif ( preg_match( '/wp-admin\/nav-menus\.php/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
-				if ( in_array( $rule_id, $remove_rules['ajax_customize'], true ) ) {
-					$action = $request_items['args']['action'] ?? '';
-					if ( $action === 'update' || $action === 'edit' ) {
+				// メニュー操作時（cocoonテーマ）の除外
+				} elseif ( preg_match( '/wp-admin\/nav-menus\.php/', $request_items['request_filename'] ) === 1 ) {
+					if ( $this->args_value_matches_any( $request_items, 'action', array( 'update', 'edit' ) ) ) {
 						$is_rule_removed = true;
 					}
 				}
@@ -712,7 +940,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			if ( preg_match( '/templates|blocks|template-parts|navigation|pages|posts/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$modify_remove_variables['args'] = array( 'content' );
+						$modify_remove_variables['args_get']  = array( 'content' );
+						$modify_remove_variables['args_post'] = array( 'content' );
 					}
 				}
 
@@ -720,7 +949,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			} elseif ( preg_match( '/global-styles/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$modify_remove_variables['args'] = array( '/^styles/' );
+						$modify_remove_variables['args_get']  = array( '/^styles/' );
+						$modify_remove_variables['args_post'] = array( '/^styles/' );
 					}
 				}
 
@@ -728,29 +958,28 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			} elseif ( preg_match( '/batch/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$modify_remove_variables['args'] = array( '/^requests/' );
+						$modify_remove_variables['args_post'] = array( '/^requests/' );
 					}
 				}
 
 			// 投稿・編集の操作は特定のルールを除外する(post.php)
 			} elseif ( preg_match( '/wp-admin\/post\.php/', $request_items['request_filename'] ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
-					$action = $request_items['args']['action'] ?? '';
-					if ( $action === 'editpost' ) {
+					if ( $this->args_value_matches( $request_items, 'action', 'editpost' ) ) {
 						$is_rule_removed = true;
-					} elseif ( $action === 'post-quickdraft-save' ) {
-						$modify_remove_variables['args'] = array( 'content' );
+					} elseif ( $this->args_value_matches( $request_items, 'action', 'post-quickdraft-save' ) ) {
+						$modify_remove_variables['args_post'] = array( 'content' );
 					}
 				}
 
 			// カスタマイズ機能からの投稿作成時の除外
-			} elseif ( preg_match( '/wp-admin\/customize\.php|customize_changeset_uuid/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
+			} elseif (
+				$this->args_key_exists( $request_items, 'customize_changeset_uuid' ) &&
+				( $this->args_value_matches( $request_items, 'customize_autosaved', 'on' ) || $this->args_value_matches( $request_items, 'wp_customize', 'on' ) )
+			) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
-					if ( ( $request_items['args']['customize_autosaved'] ?? '' ) === 'on' || ( $request_items['args']['wp_customize'] ?? '' ) === 'on' ) {
-						$action = $request_items['args']['action'] ?? '';
-						if ( $action === 'customize-nav-menus-insert-auto-draft' ) {
-							$modify_remove_variables['args'] = array( '/^params/' );
-						}
+					if ( $this->args_value_matches( $request_items, 'action', 'customize-nav-menus-insert-auto-draft' ) ) {
+						$modify_remove_variables['args_post'] = array( '/^params/' );
 					}
 				}
 
@@ -758,7 +987,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			} elseif ( preg_match( '/wp\/v2\/nishiki_pro_(patterns|content)/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$modify_remove_variables['args'] = array( 'content' );
+						$modify_remove_variables['args_get']  = array( 'content' );
+						$modify_remove_variables['args_post'] = array( 'content' );
 					}
 				}
 
@@ -766,7 +996,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			} elseif ( preg_match( '/wp\/v2\/xw_block_patterns/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$modify_remove_variables['args'] = array( 'content' );
+						$modify_remove_variables['args_get']  = array( 'content' );
+						$modify_remove_variables['args_post'] = array( 'content' );
 					}
 				}
 
@@ -774,7 +1005,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			} elseif ( preg_match( '/wp\/v2\/(cta|vk-block-patterns)/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$modify_remove_variables['args'] = array( 'content' );
+						$modify_remove_variables['args_get']  = array( 'content' );
+						$modify_remove_variables['args_post'] = array( 'content' );
 					}
 				}
 
@@ -782,7 +1014,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			} elseif ( preg_match( '/wp\/v2\/(lp|blog_parts)/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$modify_remove_variables['args'] = array( 'content' );
+						$modify_remove_variables['args_get']  = array( 'content' );
+						$modify_remove_variables['args_post'] = array( 'content' );
 					}
 				}
 
@@ -790,7 +1023,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			} elseif ( preg_match( '/wp\/v2\/snow-monkey-search/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$modify_remove_variables['args'] = array( 'content' );
+						$modify_remove_variables['args_get']  = array( 'content' );
+						$modify_remove_variables['args_post'] = array( 'content' );
 					}
 				}
 
@@ -799,7 +1033,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			} elseif ( ! empty( $acf_post_types ) && preg_match( '/wp\/v2\/(' . implode( '|', array_map( 'preg_quote', $acf_post_types ) ) . ')/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$modify_remove_variables['args'] = array( 'content' );
+						$modify_remove_variables['args_get']  = array( 'content' );
+						$modify_remove_variables['args_post'] = array( 'content' );
 					}
 				}
 
@@ -808,7 +1043,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			} elseif ( ! empty( $cptui_post_types ) && preg_match( '/wp\/v2\/(' . implode( '|', array_map( 'preg_quote', $cptui_post_types ) ) . ')/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$modify_remove_variables['args'] = array( 'content' );
+						$modify_remove_variables['args_get']  = array( 'content' );
+						$modify_remove_variables['args_post'] = array( 'content' );
 					}
 				}
 			}
@@ -821,8 +1057,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			if ( preg_match( '/wp\/v2\/(pages|posts)/', $rest_endpoint ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['rest_api_search'], true ) ) {
 					if ( preg_match( '/_locale\=user/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						if ( ( $request_items['args']['context'] ?? '' ) === 'edit' && isset( $request_items['args']['search'] ) ) {
-							$modify_remove_variables['args'] = array( 'search' );
+						if ( ( $request_items['args_get']['context'] ?? '' ) === 'edit' && isset( $request_items['args_get']['search'] ) ) {
+							$modify_remove_variables['args_get'] = array( 'search' );
 						}
 					}
 				}
@@ -831,16 +1067,17 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 		// cocoonテーマでの除外処理（theme-func-text, theme-settings, theme-ranking, theme-affiliate-tag）
 		if ( isset( $remove_rules['cocoon'] ) ) {
-			$referer = $_SERVER['HTTP_REFERER'] ?? '';
-			if ( preg_match( '/wp-admin\/admin\.php\?page\=theme-(func-text|settings|ranking|affiliate-tag)/', $referer ) === 1 ) {
-				if ( in_array( $rule_id, $remove_rules['cocoon'], true ) ) {
-					$action = $request_items['args']['action'] ?? '';
-					if ( $action === 'new' || $action === 'edit' ) {
-						$is_rule_removed = true;
-					}
+			$page = $request_items['args_get']['page'] ?? '';
+			if ( preg_match( '/^theme-(func-text|settings|ranking|affiliate-tag)$/', $page ) === 1 ) {
+				if ( preg_match( '/wp-admin\/admin\.php/', $request_items['request_filename'] ) === 1 ) {
+					if ( in_array( $rule_id, $remove_rules['cocoon'], true ) ) {
+						if ( $this->args_value_matches_any( $request_items, 'action', array( 'new', 'edit' ) ) ) {
+							$is_rule_removed = true;
+						}
 
-					if ( isset( $request_items['args']['comment_information_message'] ) ) {
-						$is_rule_removed = true;
+						if ( isset( $request_items['args_post']['comment_information_message'] ) ) {
+							$is_rule_removed = true;
+						}
 					}
 				}
 			}
@@ -848,10 +1085,12 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 		if ( isset( $remove_rules['emanon'] ) ) {
 			// emanonルール除外
-			if ( preg_match( '/wp-admin\/admin.php\?page\=emanon_setting_page/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
-				if ( in_array( $rule_id, $remove_rules['emanon'], true ) ) {
-					if ( ( $request_items['args']['action'] ?? '' ) === 'delete_transients_emanon_setting' ) {
-						$is_rule_removed = true;
+			if ( ( $request_items['args_get']['page'] ?? '' ) === 'emanon_setting_page' ) {
+				if ( preg_match( '/wp-admin\/admin\.php/', $request_items['request_filename'] ) === 1 ) {
+					if ( in_array( $rule_id, $remove_rules['emanon'], true ) ) {
+						if ( $this->args_value_matches( $request_items, 'action', 'delete_transients_emanon_setting' ) ) {
+							$is_rule_removed = true;
+						}
 					}
 				}
 			}
@@ -859,10 +1098,12 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 		if ( isset( $remove_rules['vkexunit'] ) ) {
 			// vkExUnitルール除外（メイン設定）
-			if ( preg_match( '/wp-admin\/admin.php\?page\=vkExUnit_main_setting/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
-				if ( in_array( $rule_id, $remove_rules['vkexunit'], true ) ) {
-					if ( preg_match( '/page\=vkExUnit_main_setting/', $_SERVER['QUERY_STRING'] ?? '' ) === 1 ) {
-						$is_rule_removed = true;
+			if ( ( $request_items['args_get']['page'] ?? '' ) === 'vkExUnit_main_setting' ) {
+				if ( preg_match( '/wp-admin\/admin\.php/', $request_items['request_filename'] ) === 1 ) {
+					if ( isset( $request_items['args_post']['_nonce_vkExUnit'] ) ) {
+						if ( in_array( $rule_id, $remove_rules['vkexunit'], true ) ) {
+							$is_rule_removed = true;
+						}
 					}
 				}
 			}
@@ -870,8 +1111,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			// vkExUnitルール除外（cssカスタマイズ）
 			if ( preg_match( '/wp-admin\/admin.php\?page\=vkExUnit_css_customize/', $_SERVER['REQUEST_URI'] ?? '' ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['vkexunit'], true ) ) {
-					$wp_http_referer = $request_items['args']['_wp_http_referer'] ?? '';
-					if ( strpos( $wp_http_referer, '/wp-admin/admin.php?page=vkExUnit_css_customize' ) !== false ) {
+					if ( $this->args_value_matches_partial( $request_items, '_wp_http_referer', '/wp-admin/admin.php?page=vkExUnit_css_customize' ) ) {
 						$is_rule_removed = true;
 					}
 				}
@@ -880,10 +1120,12 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 		if ( isset( $remove_rules['nishiki'] ) ) {
 			// nishikiルール除外
-			if ( preg_match( '/wp-admin\/admin.php\?page\=nishiki-pro-general\.php/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
-				if ( in_array( $rule_id, $remove_rules['nishiki'], true ) ) {
-					if ( ( $request_items['args']['action'] ?? '' ) === 'update' ) {
-						$is_rule_removed = true;
+			if ( $this->args_value_matches_regex( $request_items, 'option_page', '/^nishiki_pro_general/' ) ) {
+				if ( preg_match( '/wp-admin\/options\.php/', $request_items['request_filename'] ) === 1 ) {
+					if ( in_array( $rule_id, $remove_rules['nishiki'], true ) ) {
+						if ( $this->args_value_matches( $request_items, 'action', 'update' ) ) {
+							$is_rule_removed = true;
+						}
 					}
 				}
 			}
@@ -891,10 +1133,12 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 		if ( isset( $remove_rules['swell'] ) ) {
 			// swellルール除外
-			if ( preg_match( '/wp-admin\/admin.php\?page\=swell_settings_editor/', $_SERVER['HTTP_REFERER'] ?? '' ) === 1 ) {
-				if ( in_array( $rule_id, $remove_rules['swell'], true ) ) {
-					if ( ( $request_items['args']['action'] ?? '' ) === 'update' ) {
-						$is_rule_removed = true;
+			if ( $this->args_value_matches_regex( $request_items, 'option_page', '/^swell_setting_group_editor/' ) ) {
+				if ( preg_match( '/wp-admin\/options\.php/', $request_items['request_filename'] ) === 1 ) {
+					if ( in_array( $rule_id, $remove_rules['swell'], true ) ) {
+						if ( $this->args_value_matches( $request_items, 'action', 'update' ) ) {
+							$is_rule_removed = true;
+						}
 					}
 				}
 			}
@@ -904,7 +1148,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			// コメント編集時の除外
 			if ( preg_match( '/wp-admin\/comment\.php/', $request_items['request_filename'] ?? '' ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['comment'], true ) ) {
-					if ( ( $request_items['args']['action'] ?? '' ) === 'editedcomment' ) {
+					if ( $this->args_value_matches( $request_items, 'action', 'editedcomment' ) ) {
 						$is_rule_removed = true;
 					}
 				}
@@ -915,13 +1159,12 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			// テーマ・プラグインエディターの操作時の除外
 			if ( preg_match( '/wp-admin\/admin-ajax\.php/', $request_items['request_filename'] ) === 1 ) {
 				if ( in_array( $rule_id, $remove_rules['ajax_editor'], true ) ) {
-					$wp_http_referer = $request_items['args']['_wp_http_referer'] ?? '';
-					if ( preg_match( '/theme-editor(\.php)?|plugin-editor(\.php)?/', $wp_http_referer ) === 1 ) {
+					if ( $this->args_value_matches_regex( $request_items, '_wp_http_referer', '/theme-editor(\.php)?|plugin-editor(\.php)?/' ) ) {
 						$is_rule_removed = true;
 					}
 
 					// オートセーブ時
-					$screen_id = $request_items['args']['screen_id'] ?? '';
+					$screen_id = $request_items['args_post']['screen_id'] ?? '';
 					if ( preg_match( '/theme-editor(\.php)?|plugin-editor(\.php)?/', $screen_id ) === 1 ) {
 						$is_rule_removed = true;
 					}
@@ -936,8 +1179,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 			if ( $is_target_rule ) {
 				// ログインURL変更設定保存時：rename_login_page_nameキーの値のみ除外
 				if ( preg_match( '/wp-admin\/admin\.php/', $request_items['request_filename'] ) === 1 ) {
-					if ( ( $request_items['args']['page'] ?? '' ) === 'cloudsecurewp_rename_login_page' ) {
-						$modify_remove_variables['args'] = array( 'rename_login_page_name' );
+					if ( ( $request_items['args_get']['page'] ?? '' ) === 'cloudsecurewp_rename_login_page' ) {
+						$modify_remove_variables['args_post'] = array( 'rename_login_page_name' );
 					}
 				}
 
@@ -952,10 +1195,15 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 						$modify_variables[] = self::VARIABLE_REQUEST_FILENAME;
 
 						// 2. args の特定キー（リダイレクト系など）を除外
-						if ( ! isset( $modify_remove_variables['args'] ) ) {
-							$modify_remove_variables['args'] = array();
+						if ( ! isset( $modify_remove_variables['args_get'] ) ) {
+							$modify_remove_variables['args_get'] = array();
 						}
-						$modify_remove_variables['args'] = array_merge( $modify_remove_variables['args'], array( 'redirect_to', '_wp_http_referer' ) );
+						$modify_remove_variables['args_get'] = array_merge( $modify_remove_variables['args_get'], array( 'redirect_to', '_wp_http_referer' ) );
+
+						if ( ! isset( $modify_remove_variables['args_post'] ) ) {
+							$modify_remove_variables['args_post'] = array();
+						}
+						$modify_remove_variables['args_post'] = array_merge( $modify_remove_variables['args_post'], array( 'redirect_to', '_wp_http_referer' ) );
 					}
 
 					if ( $is_login_page_access || $is_login_page_referer ) {
@@ -1045,6 +1293,116 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 
 	/**
+	 * バックトラック超過が発生したパラメータの表示用文字列を生成
+	 *
+	 * @param string $variable WAF 変数種別
+	 * @param string $key      パラメータ名
+	 * @return string
+	 */
+	private function format_backtrack_key( string $variable, string $key ): string {
+		switch ( $variable ) {
+			// REQUEST_FILENAME / XML は単一文字列を検査するためパラメータ名（キー）を持たず、固定ラベルを返す
+			case self::VARIABLE_REQUEST_FILENAME:
+				return 'URL';
+
+			case self::VARIABLE_XML:
+				return 'XML';
+
+			case self::VARIABLE_ARGS_GET:
+			case self::VARIABLE_ARGS_GET_NAMES:
+				$label = 'GET';
+				break;
+
+			case self::VARIABLE_ARGS_POST:
+			case self::VARIABLE_ARGS_POST_NAMES:
+				$content_type = isset( $_SERVER['CONTENT_TYPE'] ) ? sanitize_text_field( wp_unslash( $_SERVER['CONTENT_TYPE'] ) ) : '';
+				$label        = ( false !== strpos( $content_type, 'application/json' ) ) ? 'JSON' : 'POST';
+				break;
+
+			case self::VARIABLE_REQUEST_COOKIES:
+			case self::VARIABLE_REQUEST_COOKIES_NAMES:
+				$label = 'COOKIE';
+				break;
+
+			case self::VARIABLE_REQUEST_HEADERS:
+				$label = 'HEADER';
+				break;
+
+			// 到達しない想定
+			default:
+				return '';
+		}
+
+		// パラメータ名が取得できない場合（JSONの空文字キー等）はカテゴリ名のみを返し、
+		// ログの検知データ欄が空文字にならないようにする
+		if ( '' === $key ) {
+			return $label;
+		}
+
+		return $label . ': ' . $key;
+	}
+
+
+	/**
+	 * 除外対象ユーザーの判定（Cookie認証 + 編集権限）
+	 *
+	 * シンプルWAFは plugins_loaded（優先度10）段階で実行されるが、この段階でも
+	 * wp_validate_auth_cookie() / user_can() は使用できる。Cookie認証以外
+	 * （Application Password、JWT、OAuth、Basic認証等）はこの判定では未ログイン扱いとなる。
+	 *
+	 * 除外条件は REST API無効化機能（disable-restapi.php）と揃え、
+	 * edit_pages または edit_posts を持つユーザー（＝寄稿者以上）のみを対象とする。
+	 *
+	 * @return bool true: 除外対象（編集権限を持つログインユーザー） / false: それ以外
+	 */
+	private function is_excluded_user_by_cookie(): bool {
+		if ( null === $this->excluded_user_by_cookie ) {
+			$this->excluded_user_by_cookie = false;
+
+			if ( function_exists( 'wp_validate_auth_cookie' ) && function_exists( 'user_can' ) ) {
+				$user_id = wp_validate_auth_cookie( '', 'logged_in' );
+				if ( $user_id ) {
+					$this->excluded_user_by_cookie =
+						user_can( $user_id, 'edit_pages' ) || user_can( $user_id, 'edit_posts' );
+				}
+			}
+		}
+
+		return $this->excluded_user_by_cookie;
+	}
+
+
+	/**
+	 * バックトラック超過エラーの結果配列を生成
+	 *
+	 * @param array  $request_items
+	 * @param string $variable WAF 変数種別
+	 * @param string $key      パラメータ名
+	 * @return array
+	 */
+	private function get_backtrack_error_results( array $request_items, string $variable, string $key ): array {
+		$matched = $this->format_backtrack_key( $variable, $key );
+
+		// バックトラックエラー記録用のURL生成
+		if ( isset( $_SERVER['HTTP_HOST'] ) && isset( $_SERVER['REQUEST_URI'] ) ) {
+			$backtrack_url = ( empty( $_SERVER['HTTPS'] ) ? 'http://' : 'https://' )
+				. sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) )
+				. esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) );
+		} else {
+			$backtrack_url = '';
+		}
+
+		return array(
+			'matched'            => $matched,
+			'ip'                 => $request_items['ip'],
+			'access_at'          => $request_items['access_at'],
+			'url'                => $backtrack_url,
+			'is_backtrack_error' => true,
+		);
+	}
+
+
+	/**
 	 * waf_engine
 	 *
 	 * @param array $waf_rules
@@ -1053,7 +1411,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	 * @param array $remove_rules
 	 * @return array
 	 */
-	public function waf_engine( $waf_rules, $locationmatch_rules, $available_rules, $remove_rules ): array {
+	public function waf_engine( $waf_rules, $locationmatch_rules, $available_rules, $remove_rules, $deny_on_backtrack_error = '1' ): array {
 		$request_items = $this->get_request_items();
 
 		$locationmatch_removed_rule_ids = $this->locationmatch_remove_rules( $locationmatch_rules, $_SERVER['REQUEST_URI'] ?? '' );
@@ -1124,12 +1482,20 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 			foreach ( $waf_rule['variables'] as $variable ) {
 				switch ( $variable ) {
-					case self::VARIABLE_ARGS:
-						$results = $this->check_request_item_array( $waf_rule, $request_items, self::VARIABLE_ARGS, $chain_items );
+					case self::VARIABLE_ARGS_GET:
+						$results = $this->check_request_item_array( $waf_rule, $request_items, self::VARIABLE_ARGS_GET, $chain_items );
 						break;
 
-					case self::VARIABLE_ARGS_NAMES:
-						$results = $this->check_request_item_array( $waf_rule, $request_items, self::VARIABLE_ARGS_NAMES, $chain_items );
+					case self::VARIABLE_ARGS_GET_NAMES:
+						$results = $this->check_request_item_array( $waf_rule, $request_items, self::VARIABLE_ARGS_GET_NAMES, $chain_items );
+						break;
+
+					case self::VARIABLE_ARGS_POST:
+						$results = $this->check_request_item_array( $waf_rule, $request_items, self::VARIABLE_ARGS_POST, $chain_items );
+						break;
+
+					case self::VARIABLE_ARGS_POST_NAMES:
+						$results = $this->check_request_item_array( $waf_rule, $request_items, self::VARIABLE_ARGS_POST_NAMES, $chain_items );
 						break;
 
 					case self::VARIABLE_REQUEST_COOKIES:
@@ -1153,6 +1519,31 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 						break;
 				}
 
+				// プリフィルタ（attack='')でバックトラック超過エラーが発生した場合は一致側に倒し、
+				// 除外対象に関わらず、後続の精密ルールに進んで判定する
+				if ( ! empty( $results['has_backtrack_error'] ) && '' === $waf_rule['attack'] ) {
+					$results = $this->get_rule_settings_and_results( $waf_rule, $request_items, $variable, $chain_items, '' );
+				}
+
+				// バックトラック超過エラーの処理
+				// 編集権限を持つログインユーザー（Cookie認証）は遮断・ログ記録の対象外とし、
+				// それ以外（未ログイン・権限なしユーザー）の場合のみ以降の判定を行う
+				if ( ! empty( $results['has_backtrack_error'] ) && ! $this->is_excluded_user_by_cookie() ) {
+					$backtrack_error_result = $this->get_backtrack_error_results( $request_items, $variable, $results['backtrack_key'] ?? '' );
+
+					// 有効な攻撃種別かつ即遮断設定（'1'）の場合のみ遮断する。
+					if ( ( $waf_rule['attack'] & $available_rules ) !== 0 && $deny_on_backtrack_error === '1' ) {
+						// バックトラック超過発生時点で即遮断
+						$backtrack_error_result['is_deny']      = true;
+						$backtrack_error_result['is_write_log'] = true;
+
+						return $backtrack_error_result;
+					}
+					// 遮断しない場合（無効化された攻撃種別、または '0'：ログのみ設定）は
+					// バックトラックエラーをログ候補として保持し、次のルールへ続行
+					$tmp_match_results = $backtrack_error_result;
+				}
+
 				$is_matched = $results['is_matched'];
 
 				if ( $is_matched ) {
@@ -1174,8 +1565,9 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 					// マッチした結果がある場合は終了処理へ（ログ記述、通知、画面表示）
 					if ( ! empty( $match_results ) ) {
-						$match_results['is_deny']      = true;
-						$match_results['is_write_log'] = true;
+						$match_results['is_deny']            = true;
+						$match_results['is_write_log']       = true;
+						$match_results['is_backtrack_error'] = false;
 
 						return $match_results;
 					}
@@ -1186,13 +1578,15 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 		}
 
 		if ( ! empty( $tmp_match_results ) ) {
-			$match_results                 = $tmp_match_results;
-			$match_results['is_deny']      = false;
-			$match_results['is_write_log'] = true;
+			$match_results                       = $tmp_match_results;
+			$match_results['is_deny']            = false;
+			$match_results['is_write_log']       = true;
+			$match_results['is_backtrack_error'] = ! empty( $match_results['is_backtrack_error'] );
 
 		} else {
-			$match_results['is_deny']      = false;
-			$match_results['is_write_log'] = false;
+			$match_results['is_deny']            = false;
+			$match_results['is_write_log']       = false;
+			$match_results['is_backtrack_error'] = false;
 		}
 
 		return $match_results;

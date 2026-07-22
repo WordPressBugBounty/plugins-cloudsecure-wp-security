@@ -76,6 +76,10 @@ class CloudSecureWP_Admin_Waf extends CloudSecureWP_Admin_Common {
 
 						$this->datas[ $key ] = $tmp;
 						break;
+
+					case 'waf_backtrack_error':
+						$this->datas[ $key ] = isset( $_POST['waf_backtrack_error_deny'] ) ? '1' : '0';
+						break;
 				}
 			}
 
@@ -110,9 +114,8 @@ class CloudSecureWP_Admin_Waf extends CloudSecureWP_Admin_Common {
 			<h1 class="title-block-title">シンプルWAF</h1>
 		</div>
 		<div class="title-bottom-text">
-			WordPressへの基本的な攻撃を検知すると403エラー（Forbidden）を返して検知履歴を記録し、WordPressの管理者ユーザーにメールで通知します。<br />
-			1分間以内に同じ種別の攻撃を検知した場合、検知履歴は記録しますが、メールでの通知は行いません。<br />
-			<strong>※機能を有効にした場合のみ、検知履歴を記録します。</strong>
+			WordPressへの代表的な攻撃を検知した際、アクセスを遮断して403エラー（Forbidden）を表示します。<br />
+			同時に検知履歴を記録し、WordPressの管理者ユーザーにメールで通知します。
 		</div>
 		<?php
 	}
@@ -134,8 +137,8 @@ class CloudSecureWP_Admin_Waf extends CloudSecureWP_Admin_Common {
 			<h1 class="title-block-title">検知履歴一覧</h1>
 		</div>
 		<div class="title-bottom-text">
-			シンプルWAFで検知・遮断した攻撃の履歴を表示します。<br />
-			正常なリクエストが遮断された場合、該当する攻撃種別の設定を変更してください。<br />
+			シンプルWAFで検知したアクセスの履歴を表示します。<br />
+			正常な操作が遮断された場合は、シンプルWAFの設定を確認してください。
 		</div>
 		<?php
 	}
@@ -177,12 +180,15 @@ class CloudSecureWP_Admin_Waf extends CloudSecureWP_Admin_Common {
 					<div class="box-row flex-start">
 						<div class="box-row-title not-label">メール通知</div>
 						<div class="box-row-content radio-btns">
-							<input type="radio" class="circle-radio" id="waf_send_admin_mail-off" name="waf_send_admin_mail" value="<?php echo esc_attr( $this->constant_settings['waf_send_admin_mail'][0] ); ?>" <?php echo esc_html( $this->datas[ 'waf_send_admin_mail_' . $this->constant_settings['waf_send_admin_mail'][0] ] ?? '' ); ?> /><label for="waf_send_admin_mail-off">通知しない</label><br />
 							<input type="radio" class="circle-radio" id="waf_send_admin_mail-on" name="waf_send_admin_mail" value="<?php echo esc_attr( $this->constant_settings['waf_send_admin_mail'][1] ); ?>" <?php echo esc_html( $this->datas[ 'waf_send_admin_mail_' . $this->constant_settings['waf_send_admin_mail'][1] ] ?? '' ); ?> /><label for="waf_send_admin_mail-on">通知する</label><br />
+							<input type="radio" class="circle-radio" id="waf_send_admin_mail-off" name="waf_send_admin_mail" value="<?php echo esc_attr( $this->constant_settings['waf_send_admin_mail'][0] ); ?>" <?php echo esc_html( $this->datas[ 'waf_send_admin_mail_' . $this->constant_settings['waf_send_admin_mail'][0] ] ?? '' ); ?> /><label for="waf_send_admin_mail-off">通知しない</label>
+							<p class="description">
+								1分以内に同じ種別の攻撃を検知した場合は、検知履歴のみ記録し、メール通知は行いません。
+							</p>
 						</div>
 					</div>
 					<div class="box-row flex-start">
-						<div class="box-row-title not-label">検知する攻撃種別</div>
+						<div class="box-row-title not-label">遮断する攻撃種別</div>
 						<div class="box-row-content ">
 							<?php foreach ( $this->constant_settings['waf_rules_category'] as $key => $value ) : ?>
 								<input id="<?php echo esc_attr( $key ); ?>" class="checkbox" type="checkbox" name="waf_available_rules[]" value=<?php echo esc_attr( $key ); ?> <?php echo esc_html( ( ( $key & $this->datas['waf_available_rules'] ) > 0 ) ? 'checked' : '' ); ?> /><label for="<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $value ); ?></label>
@@ -190,6 +196,20 @@ class CloudSecureWP_Admin_Waf extends CloudSecureWP_Admin_Common {
 									<br/>
 								<?php endif; ?>
 							<?php endforeach; ?>
+						</div>
+					</div>
+					<div class="box-row flex-start">
+						<div class="box-row-title not-label">検査上限超過時の扱い</div>
+						<div class="box-row-content">
+							<input type="checkbox" class="checkbox" id="waf_backtrack_error_deny"
+									name="waf_backtrack_error_deny"
+									value="1"<?php checked( $this->datas['waf_backtrack_error'] !== '0' ); ?> />
+							<label for="waf_backtrack_error_deny">検査上限を超えたアクセスを遮断する</label>
+							<br/>
+							<p class="description">
+								通常は、安全のため設定を有効にしておくことを推奨します。<br />
+								正常な操作が遮断される場合のみ、詳細を確認のうえチェックを外してください。<a class="title-block-link" target="_blank" href="https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security/waf.php#test-limit-exceeded">詳細はこちら</a>
+							</p>
 						</div>
 					</div>
 				</div>
@@ -228,7 +248,7 @@ class CloudSecureWP_Admin_Waf extends CloudSecureWP_Admin_Common {
 				}
 
 				th.column-ip {
-					width: 13em;
+					width: 14em;
 				}
 
 				th.sortable a, th.sorted a {

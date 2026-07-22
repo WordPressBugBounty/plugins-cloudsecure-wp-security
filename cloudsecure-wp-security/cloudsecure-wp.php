@@ -2,9 +2,9 @@
 /**
  * The plugin bootstrap file
  *
- * 管理画面とログインURLをサイバー攻撃から守る、安心の国産・日本語対応プラグインです。
- * かんたんな設定を行うだけで、不正アクセスや不正ログインからあなたのWordPressを保護し、セキュリティが向上します。
- * また、各機能の有効・無効（ON・OFF）や設定などをお好みにカスタマイズし、いつでも保護状態を管理できます。
+ * CloudSecure WP Securityは、管理画面とログインURLをサイバー攻撃から守る、国産・日本語対応のセキュリティ対策プラグインです。
+ * 簡単な設定だけで、不正アクセスや不正ログインからWordPressを保護し、サイトのセキュリティを高めます。
+ * 各機能は有効／無効を切り替えるだけで設定でき、必要な対策をわかりやすく管理できます。シンプルで扱いやすい設計のため、日々のサイト運用にも取り入れやすいプラグインです。
  *
  * @link              https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security
  * @package           CloudSecure_WP_Security
@@ -12,8 +12,8 @@
  * @wordpress-plugin
  * Plugin Name:   CloudSecure WP Security
  * Plugin URI:    https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security
- * Description:   管理画面とログインURLをサイバー攻撃から守る、安心の国産・日本語対応プラグインです。かんたんな設定を行うだけで、不正アクセスや不正ログインからあなたのWordPressを保護し、セキュリティが向上します。また、各機能の有効・無効（ON・OFF）や設定などをお好みにカスタマイズし、いつでも保護状態を管理できます。
- * Version:       1.4.11
+ * Description:   CloudSecure WP Securityは、管理画面とログインURLをサイバー攻撃から守る、国産・日本語対応のセキュリティ対策プラグインです。簡単な設定だけで、不正アクセスや不正ログインからWordPressを保護し、サイトのセキュリティを高めます。各機能は有効／無効を切り替えるだけで設定でき、必要な対策をわかりやすく管理できます。シンプルで扱いやすい設計のため、日々のサイト運用にも取り入れやすいプラグインです。
+ * Version:       1.4.12
  * Requires PHP:  7.1
  * Author:        XServer Inc.
  * Author URI:    https://www.xserver.co.jp

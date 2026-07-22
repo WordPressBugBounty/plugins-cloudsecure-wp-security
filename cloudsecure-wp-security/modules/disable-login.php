@@ -166,6 +166,35 @@ class CloudSecureWP_Disable_Login extends CloudSecureWP_Common {
 	}
 
 	/**
+	 * ログイン成功時の無効化情報リセット
+	 *
+	 * ログインフォーム・XML-RPCいずれの経路でも、ログイン成功時に
+	 * 当該IPの失敗カウントをリセットしステータスを成功にする。
+	 *
+	 * @param string $ip
+	 * @return void
+	 */
+	public function reset_on_success( string $ip ): void {
+		global $wpdb;
+
+		$this->remove_expired_login();
+
+		$data = array(
+			'ip'           => $ip,
+			'status'       => self::LOGIN_STATUS_SUCCESS,
+			'failed_count' => 0,
+			'login_at'     => current_time( 'mysql' ),
+		);
+
+		$row = $this->get_row_by_ip( $ip );
+		if ( empty( $row ) ) {
+			$wpdb->insert( $this->get_table_name(), $data );
+		} else {
+			$wpdb->update( $this->get_table_name(), $data, array( 'ip' => $ip ) );
+		}
+	}
+
+	/**
 	 * 期限切れログイン情報削除
 	 *
 	 * @return void

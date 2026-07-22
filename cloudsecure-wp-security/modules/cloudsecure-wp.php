@@ -728,6 +728,10 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			$this->two_factor_authentication->migrate_2fa_user_data();
 		}
 
+		if ( version_compare( $old_version, '1.4.12' ) < 0 ) {
+			$this->waf->migrate_waf_backtrack_error_default();
+		}
+
 		$this->config->set( 'version', $now_version );
 		$this->config->save();
 	}

@@ -266,15 +266,16 @@ wp cldsec-wp-security enable disable-restapi --exclude="wp/v2/users,wp/v2/posts"
 
 ### waf (シンプルWAF)
 ```bash
-wp cldsec-wp-security enable waf --available_rules="sql,xss,command" --send_admin_mail=2
+wp cldsec-wp-security enable waf --available_rules="sql,xss,command" --send_admin_mail=2 --backtrack_error=1
 ```
 
-**設定項目と設定可能な値:** 設定項目なし (有効/無効のみ)
+**設定項目と設定可能な値:**
 
-| オプション           | 説明              | 設定可能な値                                  |
-|----------------------|-----------------|-----------------------------------------------|
-| --available_rules    | 検知する攻撃種別  | sql, xss, command, code, mail(カンマ区切り)   |
-| --send_admin_mail    | メール通知       | 1(通知しない), 2(通知する)                     |
+| オプション           | 説明                       | 設定可能な値                                  |
+|----------------------|--------------------------|-----------------------------------------------|
+| --available_rules    | 検知する攻撃種別            | sql, xss, command, code, mail(カンマ区切り)   |
+| --send_admin_mail    | メール通知                 | 1(通知しない), 2(通知する)                     |
+| --backtrack_error    | 検査上限超過時の遮断設定    | 0(遮断しない), 1(遮断する)                     |
 
 
 ### login-notification (ログイン通知)

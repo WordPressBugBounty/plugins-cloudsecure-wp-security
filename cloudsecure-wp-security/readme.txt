@@ -1,24 +1,26 @@
 === CloudSecure WP Security ===
-Contributors: cloudsecure
+Contributors: xserverjp, cloudsecure
 Tags: security, login lock, brute force, anti-spam, waf
 Requires at least: 5.3.15
 Tested up to: 7.0
-Stable tag: 1.4.11
+Stable tag: 1.4.12
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-管理画面とログインURLをサイバー攻撃から守る、国産・日本語対応のセキュリティ対策プラグインです。
-かんたんな設定を行うだけで、不正アクセスや不正ログインからあなたのWordPressを保護します。
+CloudSecure WP Securityは、管理画面とログインURLをサイバー攻撃から守る、国産・日本語対応のセキュリティ対策プラグインです。
+簡単な設定だけで、不正アクセスや不正ログインからWordPressを保護し、サイトのセキュリティを高めます。
 
 == Description ==
-管理画面とログインURLをサイバー攻撃から守る、安心の国産・日本語対応プラグインです。
-かんたんな設定を行うだけで、不正アクセスや不正ログインからあなたのWordPressを保護し、セキュリティが向上します。
-また、各機能の有効・無効（ON・OFF）や設定などをお好みにカスタマイズし、いつでも保護状態を管理できます。
+CloudSecure WP Securityは、管理画面とログインURLをサイバー攻撃から守る、国産・日本語対応のセキュリティ対策プラグインです。
+簡単な設定だけで、不正アクセスや不正ログインからWordPressを保護し、サイトのセキュリティを高めます。
+各機能は有効／無効を切り替えるだけで設定でき、必要な対策をわかりやすく管理できます。シンプルで扱いやすい設計のため、日々のサイト運用にも取り入れやすいプラグインです。
+
+※ 本プラグインは日本国内の利用者向けに提供しているものであり、EU居住者を対象とした提供は意図していません。
 
 ドキュメントやFAQなど、より詳細な情報は [こちら](https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security) でご覧いただけます。
 
 * WordPressのマルチサイト機能には対応していません。
-* WebサーバーのApache1.3、2.xにのみ対応しています。
+* WebサーバーはApache2.xでの動作を確認済みです。
 * 画像認証追加機能を利用するためには、PHPに拡張ライブラリ「gd」をインストールする必要があります。
 * 管理画面アクセス制限機能、ログインURL変更機能を利用するためには、Apacheに「mod_rewrite」を読み込む必要があります。
 
@@ -40,8 +42,8 @@ License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
 = 2段階認証 =
 ログイン時、ユーザー名とパスワードの入力に加え、別のコードで追加認証を行います。
-利用するには、[Google Authenticator](https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2) アプリケーションでデバイスを登録する必要があります。
-アプリケーションに表示された6桁の認証コードをログイン画面で入力し、すべての情報が一致すればログインできます。
+認証方法は[Google Authenticator](https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2) またはメール認証のいずれかを選択できます。
+各認証方法で生成された6桁の認証コードをログイン画面で入力し、すべての情報が一致すればログインできます。
 ユーザー名やパスワードを不正入手した第三者によるログインやなりすましを防止し、セキュリティを強化します。
 
 = 画像認証追加 =
@@ -105,6 +107,10 @@ WordPress、プラグイン、テーマの更新が必要になったとき、Wo
 [CloudSecure WP Security FAQ](https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security/faq.php)
 
 == Changelog ==
+
+= 1.4.12 =
+* 事業移管のため貢献者情報にエックスサーバー株式会社を追加
+* 軽微な修正
 
 = 1.4.11 =
 * CVE-2026-63030（通称：wp2shell）の脆弱性対応としてREST APIのバッチエンドポイント（/wp-json/batch/v1）への通信を遮断
@@ -187,7 +193,7 @@ WordPress、プラグイン、テーマの更新が必要になったとき、Wo
 * 軽微な修正
 
 = 1.3.13 =
-* 「ユーザー一覧」ぺージにおいて、二段階認証の有効/無効を表示する機能を追加
+* 「ユーザー一覧」ページにおいて、二段階認証の有効/無効を表示する機能を追加
 * 軽微な修正
 
 = 1.3.12 =
@@ -274,6 +280,7 @@ WordPress、プラグイン、テーマの更新が必要になったとき、Wo
 * 2機能を追加（2段階認証、サーバーエラー通知）
 
 = 1.0.2 =
+* 正式リリース
 * 軽微な修正
 
 = 0.9.0 =

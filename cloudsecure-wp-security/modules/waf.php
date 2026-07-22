@@ -5,36 +5,38 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
-	private const KEY_FEATURE            = 'waf';
-	private const KEY_SEND_ADMIN_MAIL    = self::KEY_FEATURE . '_send_admin_mail';
-	private const SEND_ADMIN_MAIL_VALUES = array( 1, 2 ); // 無効、有効 .
-	private const KEY_SEND_AT            = self::KEY_FEATURE . '_send_at';
-	private const KEY_AVAILABLE_RULES    = self::KEY_FEATURE . '_available_rules';
-	private const RULES_CATEGORY         = self::KEY_FEATURE . '_rules_category';
-	private const RULES_CATEGORY_VALUES  = array( 1, 2, 4, 8, 16 );
-	private const RULES_CATEGORY_NAMES   = array(
+	private const KEY_FEATURE              = 'waf';
+	private const KEY_SEND_ADMIN_MAIL      = self::KEY_FEATURE . '_send_admin_mail';
+	private const SEND_ADMIN_MAIL_VALUES   = array( 1, 2 ); // 無効、有効 .
+	private const KEY_SEND_AT              = self::KEY_FEATURE . '_send_at';
+	private const KEY_AVAILABLE_RULES      = self::KEY_FEATURE . '_available_rules';
+	private const KEY_DENY_BACKTRACK_ERROR = self::KEY_FEATURE . '_backtrack_error';
+	private const RULES_CATEGORY           = self::KEY_FEATURE . '_rules_category';
+	private const RULES_CATEGORY_VALUES    = array( 1, 2, 4, 8, 16 );
+	private const RULES_CATEGORY_NAMES     = array(
 		'SQLインジェクション',
 		'クロスサイトスクリプティング',
 		'OSコマンドインジェクション',
 		'コードインジェクション',
 		'メールヘッダインジェクション',
 	);
-	private const TABLE_NAME             = 'cloudsecurewp_waf_log';
-	private const COLUMN_ID              = 'id';
-	private const COLUMN_ACCESS_AT       = 'access_at';
-	private const COLUMN_ATTACK          = 'attack';
-	private const COLUMN_URL             = 'url';
-	private const COLUMN_MATCHED         = 'matched';
-	private const COLUMN_IP              = 'ip';
-	private const COLUMNS                = array(
+	private const BACKTRACK_ATTACK_NAME    = '検査上限エラー';
+	private const TABLE_NAME               = 'cloudsecurewp_waf_log';
+	private const COLUMN_ID                = 'id';
+	private const COLUMN_ACCESS_AT         = 'access_at';
+	private const COLUMN_ATTACK            = 'attack';
+	private const COLUMN_URL               = 'url';
+	private const COLUMN_MATCHED           = 'matched';
+	private const COLUMN_IP                = 'ip';
+	private const COLUMNS                  = array(
 		self::COLUMN_ID        => 'ID',
 		self::COLUMN_ACCESS_AT => '日時',
-		self::COLUMN_ATTACK    => '攻撃種別',
-		self::COLUMN_URL       => '検知したページのURL',
-		self::COLUMN_MATCHED   => 'マッチした文字列',
-		self::COLUMN_IP        => '攻撃元IPアドレス',
+		self::COLUMN_ATTACK    => '検知内容',
+		self::COLUMN_URL       => '検知されたページのURL',
+		self::COLUMN_MATCHED   => '検知されたデータ',
+		self::COLUMN_IP        => 'アクセス元IPアドレス',
 	);
-	private const MAX_LOG                = 10000;
+	private const MAX_LOG                  = 10000;
 	private $config;
 	private $waf_rules;
 
@@ -74,10 +76,11 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 	 */
 	public function get_default(): array {
 		$ret = array(
-			self::KEY_FEATURE         => 'f',
-			self::KEY_SEND_ADMIN_MAIL => self::SEND_ADMIN_MAIL_VALUES[1],
-			self::KEY_SEND_AT         => array(),
-			self::KEY_AVAILABLE_RULES => 31,
+			self::KEY_FEATURE               => 'f',
+			self::KEY_SEND_ADMIN_MAIL       => self::SEND_ADMIN_MAIL_VALUES[1],
+			self::KEY_SEND_AT               => array(),
+			self::KEY_AVAILABLE_RULES       => 31,
+			self::KEY_DENY_BACKTRACK_ERROR  => '1',
 		);
 
 		return $ret;
@@ -224,9 +227,14 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 			$match_results['matched'] = mb_substr( $match_results['matched'], 0, 32767, 'UTF-8' );
 		}
 
+		// attack_nameが指定されている場合はそのまま使用、それ以外はattack値から変換
+		$attack_name = isset( $match_results['attack_name'] )
+			? $match_results['attack_name']
+			: $this->attack2name( $match_results['attack'] );
+
 		$data = array(
 			self::COLUMN_ACCESS_AT => $match_results['access_at'],
-			self::COLUMN_ATTACK    => $this->attack2name( $match_results['attack'] ),
+			self::COLUMN_ATTACK    => $attack_name,
 			self::COLUMN_URL       => $match_results['url'],
 			self::COLUMN_MATCHED   => $match_results['matched'],
 			self::COLUMN_IP        => $match_results['ip'],
@@ -271,12 +279,56 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 		$allowed_orderby = array( 'access_at', 'attack', 'url', 'matched', 'ip' );
 		$orderby         = in_array( $orderby, $allowed_orderby, true ) ? $orderby : 'access_at';
 		$order           = ( 'asc' === $order ) ? 'ASC' : 'DESC';
-		$sql             = "SELECT * FROM {$table_name} ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d";
+		$sql             = $wpdb->prepare( "SELECT * FROM {$table_name} ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d", $per_page, $offset );
 
 		return array(
-			$wpdb->get_results( $wpdb->prepare( $sql, $per_page, $offset ), ARRAY_A ),
+			$wpdb->get_results( $sql, ARRAY_A ),
 			$wpdb->get_var( "SELECT count(*) FROM {$table_name}" ),
 		);
+	}
+
+
+	/**
+	 * バックトラック超過エラーの通知処理
+	 *
+	 * @param array $results waf_engine から返された結果配列
+	 * @return void
+	 */
+	public function block_notice_backtrack( $results ): void {
+		$match_access_at = strtotime( $results['access_at'] );
+		$settings        = $this->get_settings();
+		$send_at         = $settings[ self::KEY_SEND_AT ] ?? array();
+		$tmp_send_at     = 0;
+		$throttle_key    = 'backtrack_error';
+
+		if ( ! empty( $send_at ) && is_array( $send_at ) ) {
+			foreach ( $send_at as $key => $val ) {
+				if ( $throttle_key === $key ) {
+					$tmp_send_at = strtotime( $val );
+					break;
+				}
+			}
+		}
+
+		if ( 60 <= $match_access_at - $tmp_send_at || $tmp_send_at === 0 ) {
+			$subject = 'アクセスをブロックしました [' . $results['access_at'] . ']';
+
+			$body  = $results['access_at'] . ' にWAFの検査で「' . self::BACKTRACK_ATTACK_NAME . "」となったアクセスをブロックしました。\n\n";
+			$body .= "詳細はこちらからご確認ください。\n";
+			$body .= admin_url( 'admin.php?page=cloudsecurewp_waf&childpage=log' ) . "\n\n";
+			$body .= "--\nCloudSecure WP Security\n";
+
+			$admins = $this->get_admin_users();
+
+			foreach ( $admins as $admin ) {
+				$this->wp_send_mail( $admin->user_email, esc_html( $subject ), esc_html( $body ) );
+			}
+
+			$send_at[ $throttle_key ] = $results['access_at'];
+
+			$this->config->set( self::KEY_SEND_AT, $send_at );
+			$this->config->save();
+		}
 	}
 
 
@@ -286,7 +338,7 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 	 * @param array $match_results
 	 * @return void
 	 */
-	public function brock_notice( $match_results ): void {
+	public function block_notice( $match_results ): void {
 		$match_access_at = strtotime( $match_results['access_at'] );
 		$settings        = $this->get_settings();
 		$send_at         = $settings[ self::KEY_SEND_AT ] ?? array();
@@ -349,19 +401,35 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 			),
 		);
 
-		$results = $this->waf_engine( $waf_rules, $locationmatch_rules, $settings[ self::KEY_AVAILABLE_RULES ], $remove_rules );
+		// 未設定（移行前等で空文字）の場合は安全側の '1'（遮断）にフォールバックする
+		$deny_on_backtrack_error = $settings[ self::KEY_DENY_BACKTRACK_ERROR ];
+		if ( '' === $deny_on_backtrack_error ) {
+			$deny_on_backtrack_error = '1';
+		}
+
+		$results = $this->waf_engine( $waf_rules, $locationmatch_rules, $settings[ self::KEY_AVAILABLE_RULES ], $remove_rules, $deny_on_backtrack_error );
 
 		if ( $results['is_deny'] && $results['is_write_log'] ) {
+			if ( ! empty( $results['is_backtrack_error'] ) ) {
+				$results['attack_name'] = self::BACKTRACK_ATTACK_NAME;
+			}
 			$this->write_log( $results );
 
 			if ( self::SEND_ADMIN_MAIL_VALUES[1] === (int) $settings[ self::KEY_SEND_ADMIN_MAIL ] ) {
-				$this->brock_notice( $results );
+				if ( ! empty( $results['is_backtrack_error'] ) ) {
+					$this->block_notice_backtrack( $results );
+				} else {
+					$this->block_notice( $results );
+				}
 			}
 
 			$this->page403();
 			exit;
 
 		} elseif ( $results['is_write_log'] ) {
+			if ( ! empty( $results['is_backtrack_error'] ) ) {
+				$results['attack_name'] = self::BACKTRACK_ATTACK_NAME;
+			}
 			$this->write_log( $results );
 		}
 	}
@@ -374,6 +442,18 @@ class CloudSecureWP_Waf extends CloudSecureWP_Waf_Engine {
 	public function activate(): void {
 		$this->save_settings( $this->get_default() );
 		$this->create_table();
+	}
+
+
+	/**
+	 * v1.4.12: 検査上限超過時の扱いのデフォルト値を移行する
+	 * WAFの有効・無効にかかわらず1（遮断）を設定する
+	 *
+	 * @return void
+	 */
+	public function migrate_waf_backtrack_error_default(): void {
+		$this->config->set( self::KEY_DENY_BACKTRACK_ERROR, '1' );
+		$this->config->save();
 	}
 
 

@@ -216,6 +216,11 @@
 	background-color: #fff;
 }
 
+/* ダッシュボード（最上位メニュー: body.toplevel_page_cloudsecurewp）以外のページでは box の下paddingを0pxにする */
+body:not(.toplevel_page_cloudsecurewp) #cloudsecure-wp-security .box {
+	padding-bottom: 0;
+}
+
 #cloudsecure-wp-security .box.mt-20 {
 	margin-top: 20px;
 }
@@ -247,6 +252,11 @@
 	padding: 12px 24px 0px 24px;
 }
 
+/* ダッシュボード（最上位メニュー: body.toplevel_page_cloudsecurewp）以外のページでは box-bottom の上paddingを0pxにする */
+body:not(.toplevel_page_cloudsecurewp) #cloudsecure-wp-security .box-bottom {
+	padding: 0 24px 0 24px;
+}
+
 #cloudsecure-wp-security .box-bottom.pt-0 {
 	padding-top: 0;
 }
@@ -259,6 +269,11 @@
 	row-gap: 20px;
 	border-bottom: 1px solid #dbdcdd;
 	padding: 12px 0px 12px 0px;
+}
+
+/* ダッシュボード（最上位メニュー: body.toplevel_page_cloudsecurewp）以外のページでは box-row の上下paddingを24pxにする */
+body:not(.toplevel_page_cloudsecurewp) #cloudsecure-wp-security .box-row {
+	padding: 24px 0 24px 0;
 }
 
 #cloudsecure-wp-security .box-row.pb-0 {
@@ -306,6 +321,16 @@
 
 #cloudsecure-wp-security .box-row-content.radio-btns {
 	min-width: 100px;
+}
+
+/* 説明文（.description）のマージンを0にする */
+#cloudsecure-wp-security .description {
+	margin: 0;
+}
+
+/* ラジオ設定欄の説明文（.description）とラジオボタンの間隔を12pxにする */
+#cloudsecure-wp-security .radio-btns .description {
+	margin: 12px 0 0 0;
 }
 
 #cloudsecure-wp-security input[type="radio"] {
@@ -357,6 +382,11 @@
 	line-height: 1.5;
 }
 
+/* 2番目以降のラジオボタンの上に間隔をつける（最後の下にはスペースを作らない） */
+#cloudsecure-wp-security .circle-radio~.circle-radio+label {
+	margin-top: 8px;
+}
+
 #cloudsecure-wp-security .circle-radio+label::after {
 	position: absolute;
 	top: 2px;
@@ -406,6 +436,11 @@
 	font-size: 13px;
 	font-weight: 400;
 	line-height: 1.5384615385;
+}
+
+/* ログインURL変更画面の .pale-text のみ上に12pxの間隔をあける */
+#cloudsecure-wp-security .pale-text.mt-12 {
+	margin: 12px 0 0 0;
 }
 
 /*チェックボックスのラベル */

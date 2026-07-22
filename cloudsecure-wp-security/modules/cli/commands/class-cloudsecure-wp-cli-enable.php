@@ -734,6 +734,11 @@ class CloudSecureWP_CLI_Enable extends CloudSecureWP_CLI_Base {
 					'validator'     => 'validate_waf_bitflag_strings',
 					'error_message' => '検知する攻撃種別には有効な攻撃タイプを指定してください。利用可能な値: ' . implode( ', ', self::WAF_ATTACK_TYPES ),
 				),
+				'backtrack_error' => array(
+					'type'           => 'select',
+					'allowed_values' => array( '0', '1' ),
+					'error_message'  => '検査上限超過時の遮断設定には 0 または 1 のいずれかの値を指定してください。',
+				),
 			),
 		);
 

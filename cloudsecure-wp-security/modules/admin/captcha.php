@@ -135,29 +135,29 @@ class CloudSecureWP_Admin_CAPTCHA extends CloudSecureWP_Admin_Common {
 					<div class="box-row flex-start">
 						<div class="box-row-title not-label">ログインフォーム</div>
 						<div class="box-row-content radio-btns">
-							<input type="radio" class="circle-radio" id="captcha_login-off" name="captcha_login" value="<?php echo esc_attr( $this->constant_settings['captcha_login'][0] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_login_' . $this->constant_settings['captcha_login'][0] ] ?? '' ); ?> /><label for="captcha_login-off"><?php echo esc_html( $this->constant_settings['captcha_login'][0] ); ?> 無効</label><br />
-							<input type="radio" class="circle-radio" id="captcha_login-on" name="captcha_login" value="<?php echo esc_attr( $this->constant_settings['captcha_login'][1] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_login_' . $this->constant_settings['captcha_login'][1] ] ?? '' ); ?> /><label for="captcha_login-on"><?php echo esc_html( $this->constant_settings['captcha_login'][1] ); ?> 有効</label>
+							<input type="radio" class="circle-radio" id="captcha_login-on" name="captcha_login" value="<?php echo esc_attr( $this->constant_settings['captcha_login'][1] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_login_' . $this->constant_settings['captcha_login'][1] ] ?? '' ); ?> /><label for="captcha_login-on">有効</label><br />
+							<input type="radio" class="circle-radio" id="captcha_login-off" name="captcha_login" value="<?php echo esc_attr( $this->constant_settings['captcha_login'][0] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_login_' . $this->constant_settings['captcha_login'][0] ] ?? '' ); ?> /><label for="captcha_login-off">無効</label>
 						</div>
 					</div>
 					<div class="box-row flex-start">
 						<div class="box-row-title not-label">コメントフォーム</div>
 						<div class="box-row-content radio-btns">
-							<input type="radio" id="captcha_comment-off" class="circle-radio" name="captcha_comment" value="<?php echo esc_attr( $this->constant_settings['captcha_comment'][0] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_comment_' . $this->constant_settings['captcha_comment'][0] ] ?? '' ); ?> /><label for="captcha_comment-off"><?php echo esc_html( $this->constant_settings['captcha_comment'][0] ); ?> 無効</label><br />
-							<input type="radio" id="captcha_comment-on" class="circle-radio" name="captcha_comment" value="<?php echo esc_attr( $this->constant_settings['captcha_comment'][1] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_comment_' . $this->constant_settings['captcha_comment'][1] ] ?? '' ); ?> /><label for="captcha_comment-on"><?php echo esc_html( $this->constant_settings['captcha_comment'][1] ); ?> 有効</label><br />
+							<input type="radio" id="captcha_comment-on" class="circle-radio" name="captcha_comment" value="<?php echo esc_attr( $this->constant_settings['captcha_comment'][1] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_comment_' . $this->constant_settings['captcha_comment'][1] ] ?? '' ); ?> /><label for="captcha_comment-on">有効</label><br />
+							<input type="radio" id="captcha_comment-off" class="circle-radio" name="captcha_comment" value="<?php echo esc_attr( $this->constant_settings['captcha_comment'][0] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_comment_' . $this->constant_settings['captcha_comment'][0] ] ?? '' ); ?> /><label for="captcha_comment-off">無効</label>
 						</div>
 					</div>
 					<div class="box-row flex-start">
 						<div class="box-row-title not-label">パスワードリセットフォーム</div>
 						<div class="box-row-content radio-btns">
-							<input type="radio" id="captcha_lost_password-off" class="circle-radio" name="captcha_lost_password" value="<?php echo esc_attr( $this->constant_settings['captcha_lost_password'][0] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_lost_password_' . $this->constant_settings['captcha_lost_password'][0] ] ?? '' ); ?> /><label for="captcha_lost_password-off"><?php echo esc_html( $this->constant_settings['captcha_lost_password'][0] ); ?> 無効</label><br />
-							<input type="radio" id="captcha_lost_password-on" class="circle-radio" name="captcha_lost_password" value="<?php echo esc_attr( $this->constant_settings['captcha_lost_password'][1] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_lost_password_' . $this->constant_settings['captcha_lost_password'][1] ] ?? '' ); ?> /><label for="captcha_lost_password-on"><?php echo esc_html( $this->constant_settings['captcha_lost_password'][1] ); ?> 有効</label>
+							<input type="radio" id="captcha_lost_password-on" class="circle-radio" name="captcha_lost_password" value="<?php echo esc_attr( $this->constant_settings['captcha_lost_password'][1] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_lost_password_' . $this->constant_settings['captcha_lost_password'][1] ] ?? '' ); ?> /><label for="captcha_lost_password-on">有効</label><br />
+							<input type="radio" id="captcha_lost_password-off" class="circle-radio" name="captcha_lost_password" value="<?php echo esc_attr( $this->constant_settings['captcha_lost_password'][0] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_lost_password_' . $this->constant_settings['captcha_lost_password'][0] ] ?? '' ); ?> /><label for="captcha_lost_password-off">無効</label>
 						</div>
 					</div>
 					<div class="box-row flex-start">
 						<div class="box-row-title not-label">ユーザー登録フォーム</div>
 						<div class="box-row-content radio-btns">
-							<input type="radio" id="captcha_register-off" class="circle-radio" name="captcha_register" value="<?php echo esc_attr( $this->constant_settings['captcha_register'][0] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_register_' . $this->constant_settings['captcha_register'][0] ] ?? '' ); ?> /><label for="captcha_register-off"><?php echo esc_html( $this->constant_settings['captcha_register'][0] ); ?> 無効</label><br />
-							<input type="radio" id="captcha_register-on" class="circle-radio" name="captcha_register" value="<?php echo esc_attr( $this->constant_settings['captcha_register'][1] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_register_' . $this->constant_settings['captcha_register'][1] ] ?? '' ); ?> /><label for="captcha_register-on"><?php echo esc_html( $this->constant_settings['captcha_register'][1] ); ?> 有効</label><br />
+							<input type="radio" id="captcha_register-on" class="circle-radio" name="captcha_register" value="<?php echo esc_attr( $this->constant_settings['captcha_register'][1] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_register_' . $this->constant_settings['captcha_register'][1] ] ?? '' ); ?> /><label for="captcha_register-on">有効</label><br />
+							<input type="radio" id="captcha_register-off" class="circle-radio" name="captcha_register" value="<?php echo esc_attr( $this->constant_settings['captcha_register'][0] ); ?>" <?php echo esc_html( $this->datas[ 'captcha_register_' . $this->constant_settings['captcha_register'][0] ] ?? '' ); ?> /><label for="captcha_register-off">無効</label>
 						</div>
 					</div>
 				</div>

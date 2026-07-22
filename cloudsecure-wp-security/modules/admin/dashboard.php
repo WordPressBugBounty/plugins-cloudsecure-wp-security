@@ -19,7 +19,7 @@ class CloudSecureWP_Admin_Dashboard extends CloudSecureWP_Admin_Common {
 	protected function admin_description(): void {
 		?>
 		<div class="title-block mb-12">
-			<p class="title-block-small-text">マニュアルは<a class="title-block-link" target="_blank" href="https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security/">こちら</a></p>
+			<p class="title-block-small-text">マニュアルは<a class="title-block-link" target="_blank" href="https://wpplugin.cloudsecure.ne.jp/manual/">こちら</a></p>
 			<h1 class="title-block-title">ダッシュボード</h1>
 		</div>
 		<?php

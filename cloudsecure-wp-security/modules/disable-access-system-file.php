@@ -89,7 +89,9 @@ class CloudSecureWP_Disable_Access_System_File extends CloudSecureWP_Waf_Engine 
 			'rest_api_search'  => array( '950005' ),
 		);
 
-		$results = $this->waf_engine( $waf_rules, $locationmatch_rules, self::AVAILABLE_RULES, $remove_rules );
+		// 本機能のルールは固定文字列の部分一致のみで構成されており、バックトラック超過は発生しない。
+		// 万一発生した場合も遮断せず素通りとする（ログ・通知の仕組みがないため、遮断すると原因追跡が困難になる）。
+		$results = $this->waf_engine( $waf_rules, $locationmatch_rules, self::AVAILABLE_RULES, $remove_rules, '0' );
 
 		if ( $results['is_deny'] ) {
 			$this->page403();

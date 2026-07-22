@@ -150,7 +150,7 @@ class CloudSecureWP_Admin_Rename_Login_Page extends CloudSecureWP_Admin_Common {
 							<div class="flex">
 								<span class="before-input"><?php echo esc_url( site_url() ); ?>/</span><input type="text" class="rename-login-page-name-input" name="rename_login_page_name" id="rename_login_page_name" value="<?php echo esc_attr( sanitize_text_field( $this->datas['rename_login_page_name'] ) ); ?>" minlength="4" maxlength="12" />
 							</div>
-							<p class="pale-text">半角英小文字、半角数字、ハイフン、アンダースコアのいずれかを使用し、4文字以上12文字以下で入力してください。</p>
+							<p class="pale-text mt-12">半角英小文字、半角数字、ハイフン、アンダースコアのいずれかを使用し、4文字以上12文字以下で入力してください。</p>
 						</div>
 					</div>
 					<div class="box-row flex-start">
