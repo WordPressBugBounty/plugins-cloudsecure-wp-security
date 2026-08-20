@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class CloudSecureWP_Admin_Disable_RESTAPI extends CloudSecureWP_Admin_Common {
 	private $disable_restapi;
-	private $active_plugin_list = '';
+	private $active_exclude_list = '';
 	private $allowed_html;
 
 	function __construct( array $info, CloudSecureWP_Disable_RESTAPI $disable_restapi ) {
@@ -63,14 +63,29 @@ class CloudSecureWP_Admin_Disable_RESTAPI extends CloudSecureWP_Admin_Common {
 		}
 
 		$this->datas    = $this->get_checked( $this->datas, array( 'disable_rest_api' ) );
+		$active_themes  = $this->disable_restapi->get_active_theme_names();
 		$active_plugins = $this->disable_restapi->get_active_plugin_names();
 
-		foreach ( $active_plugins as $active_plugin ) {
-			$this->active_plugin_list .= '<li><span>' . $active_plugin . '</span>&nbsp;<a class="btn-exclude">[追加]</a></li>' . "\n";
+		// 除外に追加していない有効なテーマ・プラグインが無いグループは見出しごと表示しない
+		if ( ! empty( $active_themes ) ) {
+			$this->active_exclude_list .= '<li class="exclude-group-label" data-group="theme">-- テーマ --</li>' . "\n";
+			foreach ( $active_themes as $active_theme ) {
+				$this->active_exclude_list .= '<li data-group="theme"><span>' . esc_html( $active_theme ) . '</span>&nbsp;<a class="btn-exclude">[追加]</a></li>' . "\n";
+			}
+		}
+
+		if ( ! empty( $active_plugins ) ) {
+			$this->active_exclude_list .= '<li class="exclude-group-label" data-group="plugin">-- プラグイン --</li>' . "\n";
+			foreach ( $active_plugins as $active_plugin ) {
+				$this->active_exclude_list .= '<li data-group="plugin"><span>' . esc_html( $active_plugin ) . '</span>&nbsp;<a class="btn-exclude">[追加]</a></li>' . "\n";
+			}
 		}
 
 		$this->allowed_html = array(
-			'li'   => array(),
+			'li'   => array(
+				'class'      => array(),
+				'data-group' => array(),
+			),
 			'span' => array(),
 			'a'    => array(
 				'class' => array(),
@@ -95,7 +110,7 @@ class CloudSecureWP_Admin_Disable_RESTAPI extends CloudSecureWP_Admin_Common {
 		</div>
 		<div class="title-bottom-text">
 			REST APIの悪用を防ぐため、機能自体を無効化します。<br />
-			デフォルトでは「oEmbed」「Contact Form 7」「Akismet」を除外プラグインにしています。<br />
+			デフォルトでは「oEmbed」「Contact Form 7」「Akismet」を除外リストに設定しています。<br />
 			<strong>※上記プラグインが正常に機能しない可能性があるため。</strong>
 		</div>
 		<?php
@@ -112,18 +127,20 @@ class CloudSecureWP_Admin_Disable_RESTAPI extends CloudSecureWP_Admin_Common {
 				<input class="enabled-or-disabled__btn" id="disabled" type="radio" name="disable_rest_api" value="f" <?php echo esc_html( $this->datas['disable_rest_api_f'] ?? '' ); ?> /><label for="disabled">無効</label>
 			</div>
 			<div class="box">
-				<div class="box-top">除外プラグイン</div>
+				<div class="box-top">除外</div>
 				<div class="box-bottom pt-0">
 					<div class="remove-plugin-area">
-						<div class="remove-plugin-area-text order-1">除外するプラグインを直接入力できます。※プラグインごとに改行してください。</div>
-						<div class="remove-plugin-area-text order-3">以下の有効なプラグインの「＋」ボタンをクリックすると、除外するプラグインに追加できます。</div>
+						<div class="remove-plugin-area-text order-1">除外するテーマ・プラグインを直接入力できます。※テーマ・プラグインごとに改行してください。</div>
+						<div class="remove-plugin-area-text order-4">以下のテーマ・プラグインの「＋」ボタンをクリックすると、除外リストに追加できます。</div>
+						<div class="remove-plugin-area-label order-2">除外リスト</div>
+						<div class="remove-plugin-area-label order-5">除外できるテーマとプラグイン</div>
 						<div class="remove-plugin-area-textarea-wrapper">
 							<textarea class="remove-plugin-area-textarea" id="disable_rest_api_exclude" name="disable_rest_api_exclude"><?php echo esc_textarea( $this->datas['disable_rest_api_exclude'] ); ?></textarea>
 						</div>
 						<div class="remove-plugin-area-like-textarea-wrapper">
 							<div class="remove-plugin-area-like-textarea">
 								<ul id="active-plugins">
-									<?php echo wp_kses( $this->active_plugin_list, $this->allowed_html ); ?>
+									<?php echo wp_kses( $this->active_exclude_list, $this->allowed_html ); ?>
 								</ul>
 							</div>
 						</div>

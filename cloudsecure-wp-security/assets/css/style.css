@@ -597,6 +597,14 @@ body:not(.toplevel_page_cloudsecurewp) #cloudsecure-wp-security .box-row {
 	line-height: 1.5384615385;
 }
 
+/* 除外リスト・除外できるテーマとプラグインの見出し */
+#cloudsecure-wp-security .remove-plugin-area-label {
+	width: calc(50% - 10px);
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.5384615385;
+}
+
 /* 除外プラグインのテキストエリアを囲む */
 #cloudsecure-wp-security .remove-plugin-area-textarea-wrapper {
 	position: relative;
@@ -654,6 +662,11 @@ body:not(.toplevel_page_cloudsecurewp) #cloudsecure-wp-security .box-row {
 	align-items: center;
 	-moz-column-gap: 2px;
 	column-gap: 2px;
+}
+
+/* 有効なテーマ・プラグインのグループ見出し（-- テーマ -- / -- プラグイン --） */
+#cloudsecure-wp-security #active-plugins li.exclude-group-label {
+	display: block;
 }
 
 /* 有効なプラグインのリスト横のボタン */
@@ -870,13 +883,26 @@ body:not(.toplevel_page_cloudsecurewp) #cloudsecure-wp-security .box-row {
 		order: 1;
 	}
 
-	#cloudsecure-wp-security .remove-plugin-area-text.order-3 {
-		order: 3;
+	#cloudsecure-wp-security .remove-plugin-area-text.order-4 {
+		order: 4;
+	}
+
+	/* 除外リスト・除外できるテーマとプラグインの見出し */
+	#cloudsecure-wp-security .remove-plugin-area-label {
+		width: 100%;
+	}
+
+	#cloudsecure-wp-security .remove-plugin-area-label.order-2 {
+		order: 2;
+	}
+
+	#cloudsecure-wp-security .remove-plugin-area-label.order-5 {
+		order: 5;
 	}
 
 	/* 除外プラグインのテキストエリアを囲む */
 	#cloudsecure-wp-security .remove-plugin-area-textarea-wrapper {
-		order: 2;
+		order: 3;
 		margin-bottom: 30px;
 		width: 100%;
 	}
@@ -897,7 +923,7 @@ body:not(.toplevel_page_cloudsecurewp) #cloudsecure-wp-security .box-row {
 
 	/* 除外プラグインのテキストエリアのようなdivを囲む */
 	#cloudsecure-wp-security .remove-plugin-area-like-textarea-wrapper {
-		order: 4;
+		order: 6;
 		width: 100%;
 	}
 

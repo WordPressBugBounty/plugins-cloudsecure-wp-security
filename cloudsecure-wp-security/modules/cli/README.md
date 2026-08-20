@@ -254,14 +254,14 @@ wp cldsec-wp-security enable disable-xmlrpc --type=2
 
 ### disable-restapi (REST API無効化)
 ```bash
-wp cldsec-wp-security enable disable-restapi --exclude="wp/v2/users,wp/v2/posts"
+wp cldsec-wp-security enable disable-restapi --exclude="oembed,contact-form-7,akismet,swell"
 ```
 
 **設定項目と設定可能な値:**
 
-| オプション   | 説明           | 設定可能な値                                      |
-|--------------|---------------|--------------------------------------------------|
-| --exclude    | 除外プラグイン | 例: oembed,contact-form-7,akismet(カンマ区切り)   |
+| オプション   | 説明                           | 設定可能な値                                            |
+|--------------|-------------------------------|--------------------------------------------------------|
+| --exclude    | 除外リスト(テーマ・プラグイン) | 例: oembed,contact-form-7,akismet,swell(カンマ区切り)   |
 
 
 ### waf (シンプルWAF)
@@ -335,6 +335,25 @@ REST API無効化機能で除外指定していない有効なプラグインの
   "result": "success",
   "data": {
     "active_plugin_names": "plugin1,plugin2,plugin3"
+  }
+}
+```
+
+#### 有効テーマ一覧の取得
+```bash
+wp cldsec-wp-security disable-restapi list-themes
+```
+
+**説明:**
+REST API無効化機能で除外指定していない有効なテーマの一覧を取得します。
+子テーマが有効な場合は親テーマを返します。テーマ名はText Domain(未定義の場合はテーマディレクトリ名)です。
+
+**レスポンス例:**
+```json
+{
+  "result": "success",
+  "data": {
+    "active_theme_names": "cocoon"
   }
 }
 ```

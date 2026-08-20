@@ -194,6 +194,10 @@ class CloudSecureWP_CAPTCHA extends CloudSecureWP_Common {
 	 * @return string
 	 */
 	public function check_gd(): string {
+		if ( ! function_exists( 'gd_info' ) ) {
+			return 'GDライブラリを利用できません';
+		}
+
 		$gd = gd_info();
 
 		if ( empty( $gd ) ) {
@@ -214,10 +218,27 @@ class CloudSecureWP_CAPTCHA extends CloudSecureWP_Common {
 	 */
 	public function check_captcha_save_dir(): string {
 		if ( ! $this->captcha->make_tmp_dir() ) {
-			return '画像認証画像保存ディレクトリを作成できません: ' . $this->captcha->tmp_dir;
+			return '画像認証画像保存ディレクトリを作成できません: ' . $this->get_display_path( $this->captcha->tmp_dir );
 		}
 
 		return '';
+	}
+
+	/**
+	 * 表示用パス取得（サーバーの絶対パスを表示しない）
+	 *
+	 * @param string $path
+	 * @return string
+	 */
+	private function get_display_path( string $path ): string {
+		$path    = wp_normalize_path( $path );
+		$abspath = wp_normalize_path( ABSPATH );
+
+		if ( 0 === strpos( $path, $abspath ) ) {
+			return str_replace( $abspath, '', $path );
+		}
+
+		return wp_basename( dirname( $path ) ) . '/' . wp_basename( $path );
 	}
 
 	/**

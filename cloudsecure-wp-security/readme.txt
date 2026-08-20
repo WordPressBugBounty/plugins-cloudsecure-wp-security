@@ -2,8 +2,8 @@
 Contributors: xserverjp, cloudsecure
 Tags: security, login lock, brute force, anti-spam, waf
 Requires at least: 5.3.15
-Tested up to: 7.0
-Stable tag: 1.4.12
+Tested up to: 7.1
+Stable tag: 1.4.13
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -107,6 +107,11 @@ WordPress、プラグイン、テーマの更新が必要になったとき、Wo
 [CloudSecure WP Security FAQ](https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security/faq.php)
 
 == Changelog ==
+
+= 1.4.13 =
+* WordPress7.1をサポート
+* REST API無効化機能の除外対象にテーマを指定できるように対応
+* 軽微な修正
 
 = 1.4.12 =
 * 事業移管のため貢献者情報にエックスサーバー株式会社を追加

@@ -75,15 +75,19 @@ class CloudSecureWP_Disable_Author_Query extends CloudSecureWP_Common {
 
 	/**
 	 * author_query
+	 *
+	 * @param WP_Query $query
+	 * @return void
 	 */
-	function init() {
-		$url = sanitize_url( $_SERVER['REQUEST_URI'] ?? '' );
+	public function pre_get_posts( $query ) {
+		if ( is_admin() || ! $query->is_main_query() ) {
+			return;
+		}
 
-		if ( ! empty( $url ) ) {
-			if ( ! is_admin() && preg_match( '/[?&]author=\d+/i', $url ) ) {
-				wp_safe_redirect( home_url( self::PAGE_404 ) );
-				exit;
-			}
+		// URL クエリ（?author=）由来で、WordPress が数値 author として作者アーカイブに解決したものだけを遮断する。
+		if ( $query->is_author() && isset( $_GET['author'] ) && '' !== $_GET['author'] && '' !== $query->get( 'author' ) ) {
+			wp_safe_redirect( home_url( self::PAGE_404 ) );
+			exit;
 		}
 	}
 

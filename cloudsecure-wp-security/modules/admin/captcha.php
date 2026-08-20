@@ -37,12 +37,11 @@ class CloudSecureWP_Admin_CAPTCHA extends CloudSecureWP_Admin_Common {
 							$tmp = 'f';
 						}
 
-						if ( '$tmp' === $tmp ) {
+						if ( 't' === $tmp ) {
 							$environment_error = $this->captcha->check_modules();
 
 							if ( '' !== $environment_error ) {
 								$this->errors[] = $environment_error;
-								$tmp            = 'f';
 							}
 						}
 

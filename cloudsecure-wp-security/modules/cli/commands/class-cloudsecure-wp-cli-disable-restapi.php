@@ -96,4 +96,55 @@ class CloudSecureWP_CLI_Disable_Restapi extends CloudSecureWP_CLI_Base {
 			);
 		}
 	}
+
+	/**
+	 * 有効なテーマの一覧を取得
+	 *
+	 * ## DESCRIPTION
+	 * REST API無効化機能で除外指定していない有効なテーマの一覧を取得します。
+	 * 子テーマが有効な場合は親テーマを返します。
+	 * 有効なテーマは常に1つだけ返される想定です。
+	 *
+	 * ## EXAMPLES
+	 * wp cldsec-wp-security disable-restapi list-themes
+	 *
+	 * @subcommand list-themes
+	 */
+	public function list_themes( $args = array(), $assoc_args = array() ) {
+		try {
+			// 機能が存在するかチェック
+			if ( ! $this->feature_instance ) {
+				$this->output_error_response( array( 'message' => 'REST API無効化機能が利用できません。' ) );
+				return;
+			}
+
+			// 有効なテーマの一覧を取得
+			if ( ! method_exists( $this->feature_instance, 'get_active_theme_names' ) ) {
+				$this->output_error_response( array( 'message' => 'get_active_theme_namesメソッドが見つかりません。' ) );
+				return;
+			}
+
+			$active_themes = $this->feature_instance->get_active_theme_names();
+
+			// テーマ名をカンマ区切りの文字列に変換
+			$theme_names_string = $this->convert_array_to_string( $active_themes );
+
+			// 成功レスポンス
+			$response_data = array(
+				'result' => 'success',
+				'data'   => array(
+					'active_theme_names' => $theme_names_string,
+				),
+			);
+
+			$this->output_success_response( $response_data );
+
+		} catch ( Exception $e ) {
+			$this->output_error_response(
+				array(
+					'message' => 'コマンド実行中にエラーが発生しました: ' . $e->getMessage(),
+				)
+			);
+		}
+	}
 }
