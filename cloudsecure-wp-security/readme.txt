@@ -3,7 +3,7 @@ Contributors: xserverjp, cloudsecure
 Tags: security, login lock, brute force, anti-spam, waf
 Requires at least: 5.3.15
 Tested up to: 7.1
-Stable tag: 1.4.13
+Stable tag: 1.4.14
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -107,6 +107,9 @@ WordPress、プラグイン、テーマの更新が必要になったとき、Wo
 [CloudSecure WP Security FAQ](https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security/faq.php)
 
 == Changelog ==
+
+= 1.4.14 =
+* シンプルWAF機能のブロック通知メールをWP Mail SMTPの設定を適用して送信できるように対応
 
 = 1.4.13 =
 * WordPress7.1をサポート

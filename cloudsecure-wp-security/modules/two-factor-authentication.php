@@ -2608,7 +2608,8 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 				function() {
 					$this->send_148_update_mail();
 				},
-				10
+				// WP Mail SMTP等が優先度10でメール処理を初期化した後に送信する。
+				11
 			);
 		}
 	}

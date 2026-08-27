@@ -1346,7 +1346,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	/**
 	 * 除外対象ユーザーの判定（Cookie認証 + 編集権限）
 	 *
-	 * シンプルWAFは plugins_loaded（優先度10）段階で実行されるが、この段階でも
+	 * シンプルWAFは plugins_loaded（優先度11）段階で実行されるが、この段階でも
 	 * wp_validate_auth_cookie() / user_can() は使用できる。Cookie認証以外
 	 * （Application Password、JWT、OAuth、Basic認証等）はこの判定では未ログイン扱いとなる。
 	 *

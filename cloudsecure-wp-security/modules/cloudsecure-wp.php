@@ -136,7 +136,9 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			}
 		} else {
 			if ( $this->waf->is_enabled() ) {
-				add_action( 'plugins_loaded', array( $this->waf, 'waf' ), 10 );
+				// WP Mail SMTP等が優先度10でメール処理を初期化した後にWAFを実行する。
+				// ログインURL変更とシステム設定ファイルアクセス防止はWAFとの相対順序を維持する。
+				add_action( 'plugins_loaded', array( $this->waf, 'waf' ), 11 );
 			}
 
 			if ( $this->server_error_notification->is_enabled() ) {
@@ -144,7 +146,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			}
 
 			if ( $this->disable_access_system_file->is_enabled() ) {
-				add_action( 'plugins_loaded', array( $this->disable_access_system_file, 'init' ), 11 );
+				add_action( 'plugins_loaded', array( $this->disable_access_system_file, 'init' ), 12 );
 			}
 
 			add_action( 'wp_login', array( $this->login_log, 'wp_login' ), 1, 1 );
@@ -165,7 +167,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 			if ( $this->rename_login_page->is_enabled() ) {
 				if ( $this->htaccess->setting_tag_exists( $this->rename_login_page->get_feature_key() ) ) {
 					remove_action( 'template_redirect', 'wp_redirect_admin_locations', 1000 );
-					add_action( 'plugins_loaded', array( $this->rename_login_page, 'wp_register_404' ), 10 );
+					add_action( 'plugins_loaded', array( $this->rename_login_page, 'wp_register_404' ), 11 );
 					add_filter( 'login_init', array( $this->rename_login_page, 'login_init' ), 10, 2 );
 					add_filter( 'site_url', array( $this->rename_login_page, 'site_url' ), 10, 4 );
 					add_filter( 'network_site_url', array( $this->rename_login_page, 'network_site_url' ), 10, 3 );
