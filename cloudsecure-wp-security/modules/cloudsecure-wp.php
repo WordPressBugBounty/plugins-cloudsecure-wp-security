@@ -229,7 +229,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 				add_action( 'pre_get_posts', array( $this->disable_author_query, 'pre_get_posts' ) );
 			}
 
-			// wp2shell（CVE-2026-63030）緩和パッチ: 未認証の /batch/v1 アクセスを常時拒否（設定なし・優先度1で類似機能より先に評価）
+			// wp2shell（CVE-2026-63030）緩和パッチ: 編集権限を持たない /batch/v1 アクセスを常時拒否（設定なし・優先度1で類似機能より先に評価）
 			add_filter( 'rest_pre_dispatch', array( $this->protect_rest_batch, 'rest_pre_dispatch' ), 1, 3 );
 
 			if ( $this->disable_restapi->is_enabled() ) {

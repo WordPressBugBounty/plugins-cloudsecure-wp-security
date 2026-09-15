@@ -65,22 +65,17 @@ class CloudSecureWP_Server_Error_Notification extends CloudSecureWP_Common {
 			$error['file'] = mb_substr( $error['file'], 0, 65535, 'UTF-8' );
 		}
 
+		// INSERT と剪定はトランザクションで囲まない（剪定の失敗時に ROLLBACK で記録済みのエラー記録まで失われるのを防ぐ）
 		try {
-			$wpdb->query( 'START TRANSACTION' );
-
 			$result = $wpdb->insert( $table_name, $error );
 			if ( $result === false || ! empty( $wpdb->last_error ) ) {
-				throw new Exception( 'Failed to insert server error.' );
+				return;
 			}
 
-			$result = $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->prefix}cloudsecurewp_server_error WHERE id <= (SELECT id FROM (SELECT id FROM {$wpdb->prefix}cloudsecurewp_server_error ORDER BY id DESC LIMIT 1 OFFSET %d) tmp)", $max_items ) );
-			if ( $result === false || ! empty( $wpdb->last_error ) ) {
-				throw new Exception( 'Failed to delete old server errors.' );
-			}
-
-			$wpdb->query( 'COMMIT' );
+			// 古い記録の剪定。失敗しても超過分は次回の書き込み時に削除される
+			$wpdb->query( $wpdb->prepare( "DELETE FROM {$table_name} WHERE id <= (SELECT id FROM (SELECT id FROM {$table_name} ORDER BY id DESC LIMIT 1 OFFSET %d) tmp)", $max_items ) );
 		} catch ( Exception $e ) {
-			$wpdb->query( 'ROLLBACK' );
+			// mysqli がエラー時に例外を投げる環境（WordPress 5.9 未満 + PHP 8.1 以降）ではここで握りつぶし、リクエスト処理を継続する
 		}
 	}
 

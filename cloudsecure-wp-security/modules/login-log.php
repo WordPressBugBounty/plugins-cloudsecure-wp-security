@@ -100,26 +100,17 @@ class CloudSecureWP_Login_Log extends CloudSecureWP_Common {
 			'login_at' => current_time( 'mysql' ),
 		);
 
+		// INSERT と剪定はトランザクションで囲まない（剪定の失敗時に ROLLBACK で記録済みのログまで失われるのを防ぐ）
 		try {
-			$wpdb->query( 'START TRANSACTION' );
-
 			$result = $wpdb->insert( $table_name, $data );
 			if ( $result === false || ! empty( $wpdb->last_error ) ) {
-				throw new Exception( 'Failed to insert login log.' );
+				return;
 			}
 
-			$row = $wpdb->get_row( $wpdb->prepare( "SELECT id FROM {$wpdb->prefix}cloudsecurewp_login_log ORDER BY id DESC LIMIT 1 OFFSET %d", $max_log ), ARRAY_A );
-
-			if ( ! empty( $row ?? array() ) ) {
-				$result = $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->prefix}cloudsecurewp_login_log WHERE id <= %d", $row['id'] ) );
-				if ( $result === false || ! empty( $wpdb->last_error ) ) {
-					throw new Exception( 'Failed to delete old login logs.' );
-				}
-			}
-
-			$wpdb->query( 'COMMIT' );
+			// 古いログの剪定。失敗しても超過分は次回の書き込み時に削除される
+			$wpdb->query( $wpdb->prepare( "DELETE FROM {$table_name} WHERE id <= (SELECT id FROM (SELECT id FROM {$table_name} ORDER BY id DESC LIMIT 1 OFFSET %d) tmp)", $max_log ) );
 		} catch ( Exception $e ) {
-			$wpdb->query( 'ROLLBACK' );
+			// mysqli がエラー時に例外を投げる環境（WordPress 5.9 未満 + PHP 8.1 以降）ではここで握りつぶし、リクエスト処理を継続する
 		}
 	}
 

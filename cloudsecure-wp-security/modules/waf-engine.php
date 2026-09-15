@@ -63,14 +63,18 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 		if ( ! empty( $request_body ) ) {
 			$parser = xml_parser_create();
 
-			xml_set_object( $parser, $this );
-			xml_set_character_data_handler( $parser, 'char' );
+			// ハンドラは callable で渡す（文字列指定と xml_set_object() は PHP 8.4 で非推奨）
+			xml_set_character_data_handler( $parser, array( $this, 'char' ) );
 
 			if ( ! xml_parse( $parser, $request_body ) ) {
 				$this->parsed_xml .= 'xml_parse_failed';
 			};
 
-			xml_parser_free( $parser );
+			// xml_parser_free() は PHP 8.0 以降は何も行わず 8.5 で非推奨
+			// PHP 7.2 以下は明示的に呼ばないとパーサーが残るため、no-op となる 8.0 を境に分岐する
+			if ( PHP_VERSION_ID < 80000 ) {
+				xml_parser_free( $parser );
+			}
 		}
 
 		return $this->parsed_xml;
@@ -191,16 +195,27 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	 * LocationMatch設定によるルールのスキップ用関数
 	 *
 	 * @param array  $locationmatch_rules
-	 * @param string $request_uri
+	 * @param string $script_name
+	 * @param string $query_string
 	 * @return array
 	 */
-	public function locationmatch_remove_rules( $locationmatch_rules, $request_uri ): array {
+	public function locationmatch_remove_rules( $locationmatch_rules, $script_name, $query_string ): array {
 		$locationmatch_removed_rule_ids = array();
 
 		foreach ( $locationmatch_rules as $locationmatch_rule ) {
-			if ( preg_match( '/' . $locationmatch_rule['path'] . '/', $request_uri ) ) {
-				$locationmatch_removed_rule_ids = array_merge( $locationmatch_removed_rule_ids, $locationmatch_rule['remove_rule_ids'] );
+			// pathはURL形式のため'\?'でパス部とクエリ部に分けて判定する
+			$separated = explode( '\?', $locationmatch_rule['path'], 2 );
+
+			if ( 1 !== preg_match( '/(?:' . $separated[0] . ')\z/', $script_name ) ) {
+				continue;
 			}
+
+			// パラメータ境界を付けて部分一致を防ぐ
+			if ( isset( $separated[1] ) && 1 !== preg_match( '/(?:^|&)(?:' . $separated[1] . ')(?:&|\z)/', $query_string ) ) {
+				continue;
+			}
+
+			$locationmatch_removed_rule_ids = array_merge( $locationmatch_removed_rule_ids, $locationmatch_rule['remove_rule_ids'] );
 		}
 
 		$locationmatch_removed_rule_ids = array_unique( $locationmatch_removed_rule_ids );
@@ -1414,7 +1429,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 	public function waf_engine( $waf_rules, $locationmatch_rules, $available_rules, $remove_rules, $deny_on_backtrack_error = '1' ): array {
 		$request_items = $this->get_request_items();
 
-		$locationmatch_removed_rule_ids = $this->locationmatch_remove_rules( $locationmatch_rules, $_SERVER['REQUEST_URI'] ?? '' );
+		$locationmatch_removed_rule_ids = $this->locationmatch_remove_rules( $locationmatch_rules, $_SERVER['SCRIPT_NAME'] ?? '', $_SERVER['QUERY_STRING'] ?? '' );
 		$skip                           = 0;
 		$skipafter                      = '';
 		$chain_items                    = array();

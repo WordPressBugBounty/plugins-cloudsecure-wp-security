@@ -5,7 +5,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * REST APIバッチエンドポイント（/batch/v1）への未認証アクセスを拒否する
+ * REST APIバッチエンドポイント（/batch/v1）へのアクセスを、編集権限を持つユーザー以外から拒否する
  *
  * WordPressコアの脆弱性 wp2shell（CVE-2026-63030: バッチAPIのルート混同 + CVE-2026-60137: SQLi）
  * による未認証RCEの緩和パッチ。設定を持たず、対応環境（非マルチサイト・競合プラグインなし）で
@@ -21,7 +21,7 @@ class CloudSecureWP_Protect_REST_Batch extends CloudSecureWP_Common {
 
 	/**
 	 * rest_pre_dispatch
-	 * バッチエンドポイントへの未認証アクセスを拒否する
+	 * バッチエンドポイントへのアクセスを、編集権限を持つユーザー以外から拒否する
 	 */
 	function rest_pre_dispatch( $result, $server, $request ) {
 		if ( is_wp_error( $result ) ) {
@@ -32,11 +32,12 @@ class CloudSecureWP_Protect_REST_Batch extends CloudSecureWP_Common {
 			return $result;
 		}
 
-		if ( is_user_logged_in() ) {
+		// 除外条件は編集権限（＝寄稿者以上）を持つユーザーのみを対象とする
+		if ( current_user_can( 'edit_pages' ) || current_user_can( 'edit_posts' ) ) {
 			return $result;
 		}
 
-		return new WP_Error( self::ERROR_CODE, 'REST APIバッチ機能への未認証アクセスは許可されていません', array( 'status' => rest_authorization_required_code() ) );
+		return new WP_Error( self::ERROR_CODE, 'REST APIバッチ機能へのアクセスは許可されていません', array( 'status' => rest_authorization_required_code() ) );
 	}
 
 	/**

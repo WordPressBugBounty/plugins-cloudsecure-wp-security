@@ -179,7 +179,11 @@ class CloudSecureWP_ReallySimpleCaptcha {
 					imagepng( $im, $file );
 			}
 
-			imagedestroy( $im );
+			// imagedestroy() は PHP 8.0 以降は何も行わず 8.5 で非推奨
+			// PHP 7.x では従来どおりの解放を維持するため、no-op となる 8.0 を境に分岐する
+			if ( PHP_VERSION_ID < 80000 ) {
+				imagedestroy( $im );
+			}
 			@chmod( $file, $this->file_mode );
 		}
 
