@@ -498,6 +498,12 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 		}
 
 		foreach ( $request_items[ $get_request_item_variable ] as $key => $val ) {
+			$checked_request_item = array(
+				'is_matched'          => false,
+				'match_string'        => '',
+				'has_backtrack_error' => false,
+				'backtrack_key'       => '',
+			);
 
 			if ( ! isset( $val ) ) {
 				$val = '';
@@ -542,7 +548,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 					break;
 			}
 
-			if ( isset( $checked_request_item['has_backtrack_error'] ) && $checked_request_item['has_backtrack_error'] ) {
+			if ( $checked_request_item['has_backtrack_error'] ) {
 				$results['has_backtrack_error'] = true;
 				$results['backtrack_key']       = $checked_request_item['backtrack_key'] ?? '';
 			}

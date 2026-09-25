@@ -10,6 +10,7 @@ class CloudSecureWP_Rename_Login_Page extends CloudSecureWP_Common {
 	private const KEY_DISABLE_REDIRECT = self::KEY_FEATURE . '_disable_redirect';
 	private $config;
 	private $htaccess;
+	private $login_allowed = false;
 
 	function __construct( array $info, CloudSecureWP_Config $config, CloudSecureWP_Htaccess $htaccess ) {
 		parent::__construct( $info );
@@ -188,16 +189,184 @@ class CloudSecureWP_Rename_Login_Page extends CloudSecureWP_Common {
 	 * login_init
 	 */
 	public function login_init() {
-		$request_uri = sanitize_url( $_SERVER['REQUEST_URI'] ?? '' );
-		if ( false !== strpos( $request_uri, 'wp-login.php' ) ) {
-			if ( false !== strpos( wp_get_referer(), $this->config->get( self::KEY_NAME ) ) ) {
-				wp_safe_redirect( $this->replace_wp_login( $request_uri ) );
-				exit;
-			} else {
-				$this->page404();
+		// 他プラグインが自前ページで login_init を発火させる場合は対象外
+		if ( $this->is_other_script() ) {
+			return;
+		}
+
+		$name = $this->get_valid_login_name();
+
+		if ( '' !== $name ) {
+			if ( $this->is_login_url_path( $this->get_request_path(), $name ) ) {
+				$this->login_allowed = true;
+				return;
+			}
+
+			if ( $this->is_login_url_path( $this->get_referer_path(), $name ) ) {
+				wp_safe_redirect( $this->get_login_url_path( $name ) . $this->get_request_query() );
 				exit;
 			}
 		}
+
+		$this->page404();
+		exit;
+	}
+
+	/**
+	 * 実行中のスクリプトが wp-login.php 以外か（wp-login.php は login_init より前に login_header() を定義する）
+	 *
+	 * @return bool
+	 */
+	private function is_other_script(): bool {
+		return ! function_exists( 'login_header' );
+	}
+
+	/**
+	 * 設定されたログイン名を検証して取得（不正な場合は空文字）
+	 *
+	 * @return string
+	 */
+	private function get_valid_login_name(): string {
+		$name = $this->config->get( self::KEY_NAME );
+
+		if ( ! is_string( $name ) || 1 !== preg_match( '/\A[a-z0-9_\-]{4,12}\z/', $name ) ) {
+			return '';
+		}
+
+		return $name;
+	}
+
+	/**
+	 * パスが新しいログインURL（site_url のパス + /{ログイン名}。site_url のパス外なら /{ログイン名} 単独も可）で始まるか
+	 *
+	 * @param string $path クエリを除いたパス
+	 * @param string $name ログイン名（検証済み）
+	 * @return bool
+	 */
+	private function is_login_url_path( string $path, string $name ): bool {
+		if ( '' === $path ) {
+			return false;
+		}
+
+		$segments = $this->get_path_segments( $path );
+		$base     = $this->get_path_segments( (string) wp_parse_url( site_url(), PHP_URL_PATH ) );
+		$expected = array_merge( $base, array( $name ) );
+
+		if ( array_slice( $segments, 0, count( $expected ) ) === $expected ) {
+			return true;
+		}
+
+		// site_url のパスで始まるのに上で一致しなかったものは不許可（ディレクトリ名とログイン名が同じ場合の /{dir}/wp-login.php 等）
+		if ( array() !== $base && array_slice( $segments, 0, count( $base ) ) === $base ) {
+			return false;
+		}
+
+		// プロキシ等で接頭辞が除去される構成向けに /{ログイン名}... 単独も許可
+		return array( $name ) === array_slice( $segments, 0, 1 );
+	}
+
+	/**
+	 * パスをデコードしてスラッシュ区切りの配列にする（空要素と「.」は除き、「..」は解決する）
+	 *
+	 * @param string $path
+	 * @return array
+	 */
+	private function get_path_segments( string $path ): array {
+		$segments = array();
+
+		foreach ( explode( '/', rawurldecode( $path ) ) as $segment ) {
+			if ( '' === $segment || '.' === $segment ) {
+				continue;
+			}
+
+			if ( '..' === $segment ) {
+				array_pop( $segments );
+				continue;
+			}
+
+			$segments[] = $segment;
+		}
+
+		return $segments;
+	}
+
+	/**
+	 * URLからクエリを除いたパスを取得（絶対URLならパス部分のみ）
+	 *
+	 * @param string $url
+	 * @return string
+	 */
+	private function extract_path( string $url ): string {
+		$path = explode( '?', $url, 2 )[0];
+
+		if ( 1 === preg_match( '#\A[a-z][a-z0-9+.\-]*://#i', $path ) ) {
+			$path = (string) wp_parse_url( $path, PHP_URL_PATH );
+		}
+
+		return $path;
+	}
+
+	/**
+	 * REQUEST_URI のパス取得
+	 *
+	 * @return string
+	 */
+	private function get_request_path(): string {
+		$request_uri = $_SERVER['REQUEST_URI'] ?? '';
+
+		if ( ! is_string( $request_uri ) ) {
+			return '';
+		}
+
+		return $this->extract_path( wp_unslash( $request_uri ) );
+	}
+
+	/**
+	 * REQUEST_URI のクエリ取得（「?」付き。無ければ空文字）
+	 *
+	 * @return string
+	 */
+	private function get_request_query(): string {
+		$request_uri = $_SERVER['REQUEST_URI'] ?? '';
+
+		if ( ! is_string( $request_uri ) ) {
+			return '';
+		}
+
+		$parts = explode( '?', wp_unslash( $request_uri ), 2 );
+
+		return isset( $parts[1] ) && '' !== $parts[1] ? '?' . $parts[1] : '';
+	}
+
+	/**
+	 * リファラのパス取得（検証済みリファラ。文字列以外は空文字）
+	 *
+	 * @return string
+	 */
+	private function get_referer_path(): string {
+		if ( isset( $_REQUEST['_wp_http_referer'] ) && ! is_string( $_REQUEST['_wp_http_referer'] ) ) {
+			return '';
+		}
+
+		$referer = wp_get_referer();
+
+		if ( ! is_string( $referer ) ) {
+			return '';
+		}
+
+		return $this->extract_path( $referer );
+	}
+
+	/**
+	 * 新しいログインURLの相対パス取得（誘導先）
+	 *
+	 * @param string $name ログイン名（検証済み）
+	 * @return string
+	 */
+	private function get_login_url_path( string $name ): string {
+		$path = (string) wp_parse_url( site_url( '/' . $name ), PHP_URL_PATH );
+
+		return '' === $path ? '/' . $name : $path;
 	}
 
 	/**
@@ -216,8 +385,13 @@ class CloudSecureWP_Rename_Login_Page extends CloudSecureWP_Common {
 
 	/**
 	 * wp_redirect
+	 * 新ログインURL経由のログインページ処理中だけ置換する（それ以外のリダイレクト先に含まれる wp-login.php はそのまま）
 	 */
 	public function wp_redirect( $location, $status ) {
+		if ( ! $this->login_allowed ) {
+			return $location;
+		}
+
 		return $this->replace_wp_login( $location );
 	}
 

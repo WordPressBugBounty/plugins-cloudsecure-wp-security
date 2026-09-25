@@ -229,11 +229,11 @@ class CloudSecureWP extends CloudSecureWP_Common {
 				add_action( 'pre_get_posts', array( $this->disable_author_query, 'pre_get_posts' ) );
 			}
 
-			// wp2shell（CVE-2026-63030）緩和パッチ: 編集権限を持たない /batch/v1 アクセスを常時拒否（設定なし・優先度1で類似機能より先に評価）
-			add_filter( 'rest_pre_dispatch', array( $this->protect_rest_batch, 'rest_pre_dispatch' ), 1, 3 );
+			// wp2shell（CVE-2026-63030）緩和パッチ: 編集権限を持たない /batch/v1 アクセスを常時拒否（設定なし・類似機能より先に評価）
+			add_filter( 'rest_pre_dispatch', array( $this->protect_rest_batch, 'rest_pre_dispatch' ), 98, 3 );
 
 			if ( $this->disable_restapi->is_enabled() ) {
-				add_filter( 'rest_pre_dispatch', array( $this->disable_restapi, 'rest_pre_dispatch' ), 10, 3 );
+				add_filter( 'rest_pre_dispatch', array( $this->disable_restapi, 'rest_pre_dispatch' ), 99, 3 );
 			}
 
 			if ( $this->update_notice->is_enabled() ) {
