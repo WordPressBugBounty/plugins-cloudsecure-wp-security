@@ -16,6 +16,7 @@ require_once __DIR__ . '/disable-xmlrpc.php';
 require_once __DIR__ . '/disable-author-query.php';
 require_once __DIR__ . '/disable-restapi.php';
 require_once __DIR__ . '/protect-rest-batch.php';
+require_once __DIR__ . '/protect-template-traversal.php';
 require_once __DIR__ . '/update-notice.php';
 require_once __DIR__ . '/captcha.php';
 require_once __DIR__ . '/../really-simple-captcha/really-simple-captcha.php';
@@ -42,6 +43,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 	private $disable_author_query;
 	private $disable_restapi;
 	private $protect_rest_batch;
+	private $protect_template_traversal;
 	private $update_notice;
 	private $captcha;
 	private $login_log;
@@ -63,6 +65,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 		$this->disable_author_query       = new CloudSecureWP_Disable_Author_Query( $info, $this->config );
 		$this->disable_restapi            = new CloudSecureWP_Disable_RESTAPI( $info, $this->config );
 		$this->protect_rest_batch         = new CloudSecureWP_Protect_REST_Batch( $info );
+		$this->protect_template_traversal = new CloudSecureWP_Protect_Template_Traversal( $info );
 		$this->update_notice              = new CloudSecureWP_Update_Notice( $info, $this->config );
 		$this->captcha                    = new CloudSecureWP_CAPTCHA( $info, $this->config );
 		$this->login_log                  = new CloudSecureWP_Login_Log( $info, $this->config, $this->disable_login );
@@ -231,6 +234,13 @@ class CloudSecureWP extends CloudSecureWP_Common {
 
 			// wp2shell（CVE-2026-63030）緩和パッチ: 編集権限を持たない /batch/v1 アクセスを常時拒否（設定なし・類似機能より先に評価）
 			add_filter( 'rest_pre_dispatch', array( $this->protect_rest_batch, 'rest_pre_dispatch' ), 98, 3 );
+
+			// テンプレート候補トラバーサル緩和パッチ: 優先度1で除外し、PHP_INT_MAX で解決先を再検査する
+			foreach ( CloudSecureWP_Protect_Template_Traversal::TEMPLATE_TYPES as $template_type ) {
+				$template_hierarchy_hook = "{$template_type}_template_hierarchy";
+				add_filter( $template_hierarchy_hook, array( $this->protect_template_traversal, 'template_hierarchy' ), 1, 1 );
+				add_filter( $template_hierarchy_hook, array( $this->protect_template_traversal, 'template_hierarchy_final' ), PHP_INT_MAX, 1 );
+			}
 
 			if ( $this->disable_restapi->is_enabled() ) {
 				add_filter( 'rest_pre_dispatch', array( $this->disable_restapi, 'rest_pre_dispatch' ), 99, 3 );
