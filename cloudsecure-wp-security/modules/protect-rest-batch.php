@@ -50,10 +50,14 @@ class CloudSecureWP_Protect_REST_Batch extends CloudSecureWP_Common {
 	 *   厳格な文字列一致では取りこぼす。末尾の空白・制御文字を除去してこのバイパスを防ぐ
 	 * - untrailingslashit: 末尾スラッシュ（`/batch/v1/`）を正規化する
 	 *
-	 * @param string $route
+	 * @param mixed $route
 	 * @return bool
 	 */
-	public function is_batch_route( string $route ): bool {
+	public function is_batch_route( $route ): bool {
+		if ( ! is_string( $route ) ) {
+			return false;
+		}
+
 		$route = strtolower( untrailingslashit( trim( $route ) ) );
 
 		if ( self::BATCH_ROUTE === $route ) {

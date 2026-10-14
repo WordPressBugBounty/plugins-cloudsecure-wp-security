@@ -77,9 +77,11 @@ class CloudSecureWP_Waf_Table extends WP_List_Table {
 		$sortable              = $this->get_sortable_columns();
 		$this->_column_headers = array( $columns, $hidden, $sortable );
 
-		$orderby                           = sanitize_text_field( $_GET['orderby'] ?? 'access_at' );
-		$order                             = sanitize_text_field( $_GET['order'] ?? 'desc' );
-		$offset                            = ( $this->get_pagenum() - 1 ) * $this->per_page;
+		$orderby = sanitize_text_field( $_GET['orderby'] ?? 'access_at' );
+		$order   = sanitize_text_field( $_GET['order'] ?? 'desc' );
+		// ページ番号に上限を付け、offset が整数の範囲を超えないようにする
+		$pagenum                           = min( $this->get_pagenum(), intdiv( PHP_INT_MAX, $this->per_page ) );
+		$offset                            = ( $pagenum - 1 ) * $this->per_page;
 		list( $this->items, $total_items ) = $this->waf->get_block_history( $orderby, $order, $this->per_page, $offset );
 
 		$this->set_pagination_args(

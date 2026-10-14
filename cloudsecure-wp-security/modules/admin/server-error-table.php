@@ -21,7 +21,8 @@ class CloudSecureWP_Server_Error_Table extends WP_List_Table {
 		$per_page                          = 50;
 		$orderby                           = sanitize_text_field( $_GET['orderby'] ?? 'created_at' );
 		$order                             = sanitize_text_field( $_GET['order'] ?? 'desc' );
-		$offset                            = ( $this->get_pagenum() - 1 ) * $per_page;
+		$pagenum                           = min( $this->get_pagenum(), intdiv( PHP_INT_MAX, $per_page ) );
+		$offset                            = ( $pagenum - 1 ) * $per_page;
 		list( $this->items, $total_items ) = $this->server_error_notification->get_server_errors( $orderby, $order, $per_page, $offset );
 		$this->_column_headers             = array(
 			$this->get_columns(),

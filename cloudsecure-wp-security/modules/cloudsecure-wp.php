@@ -287,7 +287,7 @@ class CloudSecureWP extends CloudSecureWP_Common {
 
 			if ( $this->two_factor_authentication->is_enabled() && 'xmlrpc.php' !== basename( sanitize_text_field( $_SERVER['SCRIPT_NAME'] ) ) && ! is_admin() ) {
 				// エラーメッセージ表示
-				add_filter( 'wp_login_errors', array( $this->two_factor_authentication, 'filter_login_errors' ), 10, 2 );
+				add_filter( 'wp_login_errors', array( $this->two_factor_authentication, 'filter_login_errors' ), 10, 1 );
 				// id・passの認証
 				add_filter( 'authenticate', array( $this->two_factor_authentication, 'two_factor_disable_login_check' ), 100, 3 );
 				add_filter( 'authenticate', array( $this->two_factor_authentication, 'block_auth_cookies_for_2fa_user' ), PHP_INT_MAX, 3 );

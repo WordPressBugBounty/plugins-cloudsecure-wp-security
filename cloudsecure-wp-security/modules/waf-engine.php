@@ -892,6 +892,21 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 
 	/**
+	 * 判定対象キーの値を文字列として取得する
+	 *
+	 * @param array  $request_items
+	 * @param string $channel args_get / args_post / request_cookies
+	 * @param string $key
+	 * @return string
+	 */
+	private function get_string_arg( array $request_items, string $channel, string $key ): string {
+		$value = $request_items[ $channel ][ $key ] ?? '';
+
+		return is_string( $value ) ? $value : '';
+	}
+
+
+	/**
 	 * WordPress管理画面での特定の処理に対し、特定のルールを除外する
 	 *
 	 * @param string $rule_id
@@ -911,7 +926,8 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 				// sourcebusterの除外（woocommerce）
 				if ( ! empty( $sbjs_cookie_keys ) ) {
 					foreach ( $sbjs_cookie_keys as $key ) {
-						if ( preg_match( '/(\;|\||\`)\W*?\b(?:(?:c(?:h(?:grp|mod|own|sh)|md|pp)|p(?:asswd|ython|erl|ing|s)|n(?:asm|map|c)|f(?:inger|tp)|(?:kil|mai)l|(?:xte)?rm|ls(?:of)?|telnet|uname|echo|id)\b|g(?:\+\+|cc\b))/i', $request_items['request_cookies'][ $key ] ) === 1 ) {
+						$cookie_value = $this->get_string_arg( $request_items, 'request_cookies', $key );
+						if ( preg_match( '/(\;|\||\`)\W*?\b(?:(?:c(?:h(?:grp|mod|own|sh)|md|pp)|p(?:asswd|ython|erl|ing|s)|n(?:asm|map|c)|f(?:inger|tp)|(?:kil|mai)l|(?:xte)?rm|ls(?:of)?|telnet|uname|echo|id)\b|g(?:\+\+|cc\b))/i', $cookie_value ) === 1 ) {
 							$is_rule_removed = true;
 							break;
 						}
@@ -1088,7 +1104,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 
 		// cocoonテーマでの除外処理（theme-func-text, theme-settings, theme-ranking, theme-affiliate-tag）
 		if ( isset( $remove_rules['cocoon'] ) ) {
-			$page = $request_items['args_get']['page'] ?? '';
+			$page = $this->get_string_arg( $request_items, 'args_get', 'page' );
 			if ( preg_match( '/^theme-(func-text|settings|ranking|affiliate-tag)$/', $page ) === 1 ) {
 				if ( preg_match( '/wp-admin\/admin\.php/', $request_items['request_filename'] ) === 1 ) {
 					if ( in_array( $rule_id, $remove_rules['cocoon'], true ) ) {
@@ -1185,7 +1201,7 @@ class CloudSecureWP_Waf_Engine extends CloudSecureWP_Common {
 					}
 
 					// オートセーブ時
-					$screen_id = $request_items['args_post']['screen_id'] ?? '';
+					$screen_id = $this->get_string_arg( $request_items, 'args_post', 'screen_id' );
 					if ( preg_match( '/theme-editor(\.php)?|plugin-editor(\.php)?/', $screen_id ) === 1 ) {
 						$is_rule_removed = true;
 					}

@@ -3,7 +3,7 @@ Contributors: xserverjp, cloudsecure
 Tags: security, login lock, brute force, anti-spam, waf
 Requires at least: 5.3.15
 Tested up to: 7.1
-Stable tag: 1.4.17
+Stable tag: 1.4.18
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -107,6 +107,10 @@ WordPress、プラグイン、テーマの更新が必要になったとき、Wo
 [CloudSecure WP Security FAQ](https://wpplugin.cloudsecure.ne.jp/cloudsecure_wp_security/faq.php)
 
 == Changelog ==
+
+= 1.4.18 =
+* シンプルWAF機能の特定のリクエストに対する処理を改善
+* 軽微な修正
 
 = 1.4.17 =
 * CVE-2026-87902の脆弱性対応として、テンプレート読み込み時の不正なファイル読み込みを防ぐ緩和策を追加

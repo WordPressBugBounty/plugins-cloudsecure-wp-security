@@ -264,7 +264,7 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 			<div class="two-fa-form">
 				<input type="hidden" name="login_token" value="<?php echo esc_attr( $login_token ); ?>">
 				<input type="hidden" name="redirect_to"
-						value="<?php echo esc_attr( wp_validate_redirect( wp_unslash( $_REQUEST['redirect_to'] ?? '' ), admin_url() ) ); ?>"/>
+						value="<?php echo esc_attr( wp_validate_redirect( $this->get_requested_redirect_to( $_REQUEST ), admin_url() ) ); ?>"/>
 				<input type="hidden" name="testcookie" value="1"/>
 				<?php if ( $auth_method === self::USER_AUTH_METHOD_RECOVERY ) : ?>
 					<!-- リカバリーコード入力フォーム -->
@@ -1072,10 +1072,29 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 		do_action( 'wp_login', $user->user_login, $user );
 
 		// リダイレクトURLの検証とリダイレクト
-		$redirect_to = wp_validate_redirect( wp_unslash( $_POST['redirect_to'] ?? '' ), admin_url() );
-		$redirect_to = apply_filters( 'login_redirect', $redirect_to, $redirect_to, $user );
+		$requested_redirect_to = $this->get_requested_redirect_to( $_POST );
+		$redirect_to           = '' === $requested_redirect_to ? admin_url() : wp_validate_redirect( $requested_redirect_to, admin_url() );
+		$redirect_to           = apply_filters( 'login_redirect', $redirect_to, $requested_redirect_to, $user );
+		if ( ! is_string( $redirect_to ) || '' === $redirect_to ) {
+			// 遷移先が無いまま exit すると白画面になるため管理画面へ
+			$redirect_to = admin_url();
+		}
 		wp_safe_redirect( $redirect_to );
 		exit;
+	}
+
+	/**
+	 * リクエストの redirect_to を文字列として取得する
+	 *
+	 * @param array $source $_REQUEST または $_POST
+	 * @return string
+	 */
+	private function get_requested_redirect_to( array $source ): string {
+		if ( ! isset( $source['redirect_to'] ) || ! is_string( $source['redirect_to'] ) ) {
+			return '';
+		}
+
+		return wp_unslash( $source['redirect_to'] );
 	}
 
 	/**
@@ -1096,11 +1115,10 @@ class CloudSecureWP_Two_Factor_Authentication extends CloudSecureWP_Common {
 	 * リダイレクト時のクエリパラメータに応じてエラーメッセージを表示
 	 *
 	 * @param WP_Error $errors
-	 * @param string   $redirect_to
 	 *
 	 * @return WP_Error
 	 */
-	public function filter_login_errors( WP_Error $errors, string $redirect_to ): WP_Error {
+	public function filter_login_errors( WP_Error $errors ): WP_Error {
 		if ( ! isset( $_GET['cloudsecurewp_2fa_error'] ) ) {
 			return $errors;
 		}
